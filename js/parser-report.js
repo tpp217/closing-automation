@@ -1,0 +1,379 @@
+/**
+ * parser-report.js - 業務報告書（.xlsx）パーサー
+ *
+ * ★ 実際のシート構造（調査済み）:
+ *
+ * 社員名簿＆査定シートの1人分ブロック例（折原 浩, 行75〜92）:
+ *
+ *   R75 A(c=0): "氏名"    F(c=5): "ふりがな"  K(c=10): "生年月日"  T(c=19): "役職"
+ *   R76 A(c=0): "折原　浩"  F(c=5): "おりはら…"             T(c=19): "業務委託"
+ *   R77 A(c=0): "現住所"
+ *   R78 A(c=0): "埼玉県…"
+ *   R80 A(c=0): "基本給"  E(c=4): "大入り"
+ *   R81 A(c=0): 26         D(c=3): "万"
+ *   R84 A(c=0): "昇給希望額"  E(c=4): "日払い"
+ *   R85 A(c=0): 0           D(c=3): "万"   E(c=4): 0   H(c=7): "円"
+ *
+ * つまり:
+ *   - 「氏名」ラベル: A列(c=0)
+ *   - 氏名の値:       次の行のA列(c=0)
+ *   - 役職の値:       氏名ラベル行と同じ行のT列(c=19) ← ヘッダー行に「役職」があり値もその行
+ *                     実際は: ヘッダー行(R75)のT列="役職", 値行(R76)のT列="業務委託"
+ *   - 「基本給」ラベル: A列(c=0)、ブロック内に出現
+ *   - 基本給の値:       「基本給」ラベルの次の行のA列(c=0)
+ *   - 「日払い」ラベル: E列(c=4)、「昇給希望額」ラベルと同じ行
+ *   - 日払いの値:       「日払い」ラベルの次の行のE列(c=4)
+ */
+
+'use strict';
+
+const ROSTER_SHEET_NAMES = ['社員名簿＆査定', '社員名簿&査定', '社員名簿', '名簿'];
+
+const EXCLUDE_SHEET_PATTERNS = [
+  /^[①②③④⑤⑥⑦⑧⑨⑩]/,
+  /^ルール$/,
+  /^\d{4}\.\d{1,2}$/,
+  /^社員名簿/,
+  /^名簿/,
+  /^管理/,
+  /^テンプレ/
+];
+
+// 列インデックス定数（調査結果より）
+const COL_NAME     = 0;   // A列: 氏名ラベル・氏名値・基本給ラベル・基本給値
+const COL_ROLE     = 19;  // T列: 役職ラベル・役職値
+
+// 個人タブの件名行（C12）の位置定数
+const PERSON_NAME_ROW = 11; // row index (0始まり) = 12行目
+const PERSON_NAME_COL = 2;  // col index (0始まり) = C列
+const COL_DAILY    = 4;   // E列: 日払いラベル・日払い値
+
+async function parseReport(buffer) {
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: false });
+  const warnings = [];
+  let contractors = [];
+
+  const rosterSheet = findRosterSheet(wb);
+  if (!rosterSheet) {
+    warnings.push({ level: 'error', message: '「社員名簿＆査定」シートが見つかりません。' });
+    return { contractors, warnings };
+  }
+
+  const { people, warnings: rosterWarnings } = extractContractorsFromRoster(wb.Sheets[rosterSheet]);
+  warnings.push(...(rosterWarnings || []));
+
+  for (const person of people) {
+    const bankResult = extractBankFromPersonSheet(wb, person.name);
+    person.bank = bankResult.bank;
+    person.sheetName = bankResult.sheetName || null;  // 個人タブ名を保持
+    if (bankResult.warnings.length) {
+      warnings.push(...bankResult.warnings.map(w => ({ ...w, person: person.name })));
+    }
+    contractors.push(person);
+  }
+
+  return { contractors, warnings };
+}
+
+function findRosterSheet(wb) {
+  for (const name of ROSTER_SHEET_NAMES) {
+    if (wb.SheetNames.includes(name)) return name;
+  }
+  return wb.SheetNames.find(n => n.includes('社員') || n.includes('名簿')) || null;
+}
+
+/**
+ * 社員名簿＆査定シートから業務委託者を抽出
+ *
+ * ブロック構造:
+ *   - A列(c=0) に "氏名" がある行 → ブロックのヘッダー行
+ *   - ヘッダー行の次の行に氏名値(A列)・役職値(T列=c=19)がある
+ *   - ブロック内のA列に "基本給" がある行の次の行A列 → 基本給値（万円）
+ *   - ブロック内のE列(c=4) に "日払い" がある行の次の行E列(c=4) → 日払い値（円）
+ */
+function extractContractorsFromRoster(ws) {
+  const warnings = [];
+  const people = [];
+
+  if (!ws || !ws['!ref']) {
+    warnings.push({ level: 'error', message: '社員名簿シートが空です。' });
+    return { people, warnings };
+  }
+
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const maxRow = range.e.r;
+
+  // A列(c=0) に「氏名」があるブロック開始行を収集
+  const blockHeaderRows = [];
+  for (let r = range.s.r; r <= maxRow; r++) {
+    const v = normText(String(getCellValue(ws, r, COL_NAME) ?? ''));
+    if (v === '氏名' || v === '氏　名') {
+      blockHeaderRows.push(r);
+    }
+  }
+
+  if (blockHeaderRows.length === 0) {
+    warnings.push({ level: 'warn', message: '社員名簿シートに「氏名」ブロックが見つかりません。' });
+    return { people, warnings };
+  }
+
+  for (let bi = 0; bi < blockHeaderRows.length; bi++) {
+    const headerRow = blockHeaderRows[bi];
+    const nextBlockStart = bi + 1 < blockHeaderRows.length ? blockHeaderRows[bi + 1] : maxRow + 1;
+    const blockEnd = nextBlockStart - 1;
+
+    // ★ 氏名の値: ヘッダー行の次の行のA列(c=0)
+    const nameRow = headerRow + 1;
+    const personName = normText(String(getCellValue(ws, nameRow, COL_NAME) ?? ''));
+    if (!personName) continue;
+
+    // ★ 役職の値: 氏名と同じ行(nameRow)のT列(c=19)
+    const roleRaw = normText(String(getCellValue(ws, nameRow, COL_ROLE) ?? ''));
+
+    // ★ 基本給の値: ブロック内でA列(c=0)に「基本給」が出現する行の次の行のA列
+    let basicPayMan = 0;
+    for (let r = headerRow; r <= blockEnd; r++) {
+      const v = normText(String(getCellValue(ws, r, COL_NAME) ?? ''));
+      if (v === '基本給' || v === '基　本　給') {
+        // 次の行のA列が数値
+        const val = getCellValue(ws, r + 1, COL_NAME);
+        if (val !== null && val !== undefined && val !== '') {
+          basicPayMan = parseFloat(val) || 0;
+        }
+        break;
+      }
+    }
+
+    // ★ 日払いの値: ブロック内でE列(c=4)に「日払い」が出現する行の次の行のE列
+    let dailyPayYen = 0;
+    for (let r = headerRow; r <= blockEnd; r++) {
+      const v = normText(String(getCellValue(ws, r, COL_DAILY) ?? ''));
+      if (v === '日払い' || v === '日払') {
+        // 次の行のE列が数値
+        const val = getCellValue(ws, r + 1, COL_DAILY);
+        if (val !== null && val !== undefined && val !== '') {
+          dailyPayYen = parseFloat(val) || 0;
+        }
+        break;
+      }
+    }
+
+    people.push({
+      name: personName,
+      role: roleRaw,
+      basicPayMan,
+      dailyPayYen,
+      bank: null,
+      warnings: []
+    });
+  }
+
+  return { people, warnings };
+}
+
+// ─────────────────────────────────────────────
+// 以下、口座情報取得（変更なし）
+// ─────────────────────────────────────────────
+
+function extractBankFromPersonSheet(wb, personName) {
+  const warnings = [];
+  const emptyBank = {
+    bankName: '', branchName: '', accountType: '',
+    accountNumber: '', accountHolderKana: ''
+  };
+
+  // まず全個人タブをスキャンしてC12の氏名で完全一致検索
+  const sheetName = findSheetByPersonName(wb, personName)
+                 || findSheetBySurname(wb, getSurname(personName));
+
+  if (!sheetName) {
+    warnings.push({
+      level: 'warn',
+      message: `個人タブ「${personName}」が見つかりません（口座情報未取得）`,
+      code: 'SHEET_NOT_FOUND'
+    });
+    return { bank: emptyBank, sheetName: null, warnings };
+  }
+
+  const ws = wb.Sheets[sheetName];
+  if (!ws || !ws['!ref']) {
+    warnings.push({ level: 'warn', message: `個人タブ「${sheetName}」が空です`, code: 'SHEET_EMPTY' });
+    return { bank: emptyBank, sheetName, warnings };
+  }
+
+  const furikomiCell = findCellContaining(ws, 'お振込先');
+  if (!furikomiCell) {
+    warnings.push({
+      level: 'warn',
+      message: `「${sheetName}」タブに「お振込先」が見つかりません`,
+      code: 'BANK_BLOCK_NOT_FOUND'
+    });
+    return { bank: emptyBank, sheetName, warnings };
+  }
+
+  const bank = extractBankBlock(ws, furikomiCell.r, furikomiCell.c);
+
+  const missing = [];
+  if (!bank.bankName) missing.push('銀行名');
+  if (!bank.branchName) missing.push('支店名');
+  if (!bank.accountNumber) missing.push('口座番号');
+  if (!bank.accountHolderKana) missing.push('名義カナ');
+
+  if (missing.length > 0) {
+    warnings.push({
+      level: 'warn',
+      message: `口座情報が一部不足（欠け: ${missing.join(', ')}）`,
+      code: 'BANK_INCOMPLETE'
+    });
+  }
+
+  return { bank, sheetName, warnings };
+}
+
+// C12検索用除外パターン（丸数字シートは除外しない＝C12で氏名を持つ個人タブを検索対象にする）
+const EXCLUDE_FOR_C12_SEARCH = [
+  /^ルール$/,
+  /^\d{4}\.\d{1,2}$/,   // 年月シート
+  /^社員名簿/,
+  /^名簿/,
+  /^管理/,
+  /^テンプレ/
+];
+
+/**
+ * 全個人タブをスキャンして、C12セルの氏名が personName と一致するシートを返す
+ * 完全一致優先 → 苗字一致でフォールバック
+ * ※ 丸数字（①②…）シートも検索対象に含める
+ */
+function findSheetByPersonName(wb, personName) {
+  const normTarget = normText(personName);
+  if (!normTarget) return null;
+
+  // 「件名」行（PERSON_NAME_ROW=11）のC列（PERSON_NAME_COL=2）を読む
+  for (const name of wb.SheetNames) {
+    if (EXCLUDE_FOR_C12_SEARCH.some(pat => pat.test(name))) continue;
+    const ws = wb.Sheets[name];
+    if (!ws || !ws['!ref']) continue;
+    const cellVal = normText(String(getCellValue(ws, PERSON_NAME_ROW, PERSON_NAME_COL) ?? ''));
+    if (!cellVal) continue;
+    // 完全一致（スペース正規化後）
+    if (cellVal === normTarget) return name;
+    // 苗字が一致
+    const cellSurname = getSurname(cellVal);
+    const targetSurname = getSurname(normTarget);
+    if (cellSurname && targetSurname && cellSurname === targetSurname) return name;
+  }
+  return null;
+}
+
+function findSheetBySurname(wb, surname) {
+  const normSurname = normText(surname);
+  // 苗字が空の場合はマッチさせない
+  if (!normSurname) return null;
+
+  // パス1: シート名と苗字が完全一致
+  for (const name of wb.SheetNames) {
+    if (EXCLUDE_SHEET_PATTERNS.some(pat => pat.test(name))) continue;
+    if (normText(name) === normSurname) return name;
+  }
+
+  // パス2: シート名が苗字を含む（例: "★能條" に "能條" が含まれる）
+  // ただし苗字がシート名に含まれる逆方向マッチは禁止
+  // （例: 苗字"原" が シート名"折原" に含まれるのは誤マッチ）
+  for (const name of wb.SheetNames) {
+    if (EXCLUDE_SHEET_PATTERNS.some(pat => pat.test(name))) continue;
+    const normName = normText(name);
+    // シート名が苗字を含む場合のみ（苗字 2文字以上を要求して短すぎる苗字の誤マッチを減らす）
+    if (normName.includes(normSurname) && normSurname.length >= 2) return name;
+  }
+
+  // パス3: 苗字がシート名を含む（シート名が苗字の略称の場合、2文字以上）
+  for (const name of wb.SheetNames) {
+    if (EXCLUDE_SHEET_PATTERNS.some(pat => pat.test(name))) continue;
+    const normName = normText(name);
+    if (normSurname.includes(normName) && normName.length >= 2) return name;
+  }
+
+  return null;
+}
+
+/**
+ * 「お振込先」ラベルを起点に口座情報を読み取る
+ *
+ * 調査済み構造（折原タブ R38〜R42）:
+ *   R38 A: "お振込先："  B: "セブン銀行"
+ *   R39                  B: "カトレア支店(111)"
+ *   R40                  B: "普通"  C: "0704011"
+ *   R41                  B: "名義（カナ）"  C: "オリハラ　ヒロシ"
+ */
+function extractBankBlock(ws, startRow, startCol) {
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const maxRow = Math.min(startRow + 15, range.e.r);
+
+  let bankName = '';
+  let branchName = '';
+  let accountType = '';
+  let accountNumber = '';
+  let accountHolderKana = '';
+
+  // お振込先ラベルの行: B列(startCol+1)が銀行名
+  const r0v = normText(String(getCellValue(ws, startRow, startCol + 1) ?? ''));
+  if (r0v && !r0v.includes('お振込') && !r0v.includes('振込先')) {
+    bankName = r0v;
+  }
+
+  // 以降の行をスキャン（startRow+1〜+8行）
+  for (let r = startRow + 1; r <= Math.min(startRow + 8, maxRow); r++) {
+    // B列(startCol+1)から読む
+    for (let dc = 1; dc <= 4; dc++) {
+      const v = normText(String(getCellValue(ws, r, startCol + dc) ?? ''));
+      if (!v) continue;
+
+      // 銀行名（まだなければ）
+      if (!bankName && !isLabelText(v)) {
+        bankName = v;
+        continue;
+      }
+
+      // 支店名
+      if (!branchName && v.includes('支店')) {
+        branchName = v;
+        continue;
+      }
+
+      // 名義ラベル
+      if (v.includes('名義') || v === 'カナ') {
+        // 右隣が名義値（ラベルテキストでなければ採用）
+        const right = normText(String(getCellValue(ws, r, startCol + dc + 1) ?? ''));
+        if (right && !right.includes('名義') && right !== 'カナ' && !isLabelText(right)) {
+          accountHolderKana = right;
+        }
+        continue;
+      }
+
+      // 口座種別
+      if ((v === '普通' || v === '当座' || v === '貯蓄') && !accountType) {
+        accountType = v;
+        // 右隣が口座番号
+        const right = normText(String(getCellValue(ws, r, startCol + dc + 1) ?? ''));
+        if (right && /^\d+$/.test(right)) {
+          accountNumber = right;
+        }
+        continue;
+      }
+
+      // 口座番号（数字のみ）
+      if (!accountNumber && /^\d{6,8}$/.test(v)) {
+        accountNumber = v;
+        continue;
+      }
+    }
+  }
+
+  return { bankName, branchName, accountType, accountNumber, accountHolderKana };
+}
+
+function isLabelText(v) {
+  const labels = ['お振込先', '振込先', '銀行', '支店', '種別', '口座', '名義', '事業者', '登録番号'];
+  return labels.some(l => v.includes(l));
+}

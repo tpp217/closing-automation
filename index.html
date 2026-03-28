@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>内勤請求チェックシステム</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ヘッダー -->
+    <header class="header">
+      <div class="header-inner">
+        <div class="header-logo">
+          <i class="fas fa-terminal"></i>
+          <div>
+            <div class="logo-main">[ BILLING_CHECK_SYS ]<span class="blink" style="margin-left:4px;">_</span></div>
+            <div class="logo-sub">VER.2026 // NAIKINTANTO UNIT</div>
+          </div>
+        </div>
+        <div class="header-actions" style="display:flex;align-items:center;gap:0.75rem;">
+          <span style="font-family:var(--font-mono);font-size:0.65rem;color:var(--text-muted);letter-spacing:0.08em;" id="header-clock"></span>
+          <button id="btn-reset-storage" class="btn btn-sm btn-outline" title="保存データをリセット">
+            <i class="fas fa-power-off"></i> RESET
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ステップナビ -->
+    <nav class="step-nav">
+      <div class="step-nav-inner">
+        <div class="step-item active" data-step="1">
+          <div class="step-circle">1</div>
+          <div class="step-label">ファイルアップロード</div>
+        </div>
+        <div class="step-divider"></div>
+        <div class="step-item" data-step="2">
+          <div class="step-circle">2</div>
+          <div class="step-label">委託者情報取得</div>
+        </div>
+        <div class="step-divider"></div>
+        <div class="step-item" data-step="3">
+          <div class="step-circle">3</div>
+          <div class="step-label">日払い突合</div>
+        </div>
+        <div class="step-divider"></div>
+        <div class="step-item" data-step="4">
+          <div class="step-circle">4</div>
+          <div class="step-label">前月差分チェック</div>
+        </div>
+        <div class="step-divider"></div>
+        <div class="step-item" data-step="5">
+          <div class="step-circle">5</div>
+          <div class="step-label">内勤請求出力</div>
+        </div>
+      </div>
+    </nav>
+
+    <main class="main-content">
+
+      <!-- ステップ1: アップロード -->
+      <section id="step-1" class="step-section active">
+        <h2 class="step-title"><i class="fas fa-upload"></i> ファイルアップロード</h2>
+        <p class="step-desc">
+          業務報告書・月計表は必須です。DRファイルがある場合は一緒にアップロードしてください。<br>
+          店舗名・年月はファイル名から自動取得します。
+        </p>
+
+        <div class="upload-grid">
+          <!-- 業務報告書 -->
+          <div class="upload-card">
+            <div class="upload-card-header">
+              <i class="fas fa-file-excel"></i> 業務報告書 <span class="badge-required">必須</span>
+            </div>
+            <div class="drop-zone" id="drop-report">
+              <i class="fas fa-cloud-upload-alt drop-icon"></i>
+              <p>ここにドロップ<br>または</p>
+              <label class="btn btn-primary">
+                ファイルを選択
+                <input type="file" id="input-report" accept=".xlsx,.xls" style="display:none">
+              </label>
+            </div>
+            <div id="report-file-info" class="file-info hidden"></div>
+          </div>
+
+          <!-- 月計表 -->
+          <div class="upload-card">
+            <div class="upload-card-header">
+              <i class="fas fa-file-excel"></i> 月計表 <span class="badge-required">必須</span>
+            </div>
+            <div class="drop-zone" id="drop-monthly">
+              <i class="fas fa-cloud-upload-alt drop-icon"></i>
+              <p>ここにドロップ<br>または</p>
+              <label class="btn btn-primary">
+                ファイルを選択
+                <input type="file" id="input-monthly" accept=".xlsx,.xls" style="display:none">
+              </label>
+            </div>
+            <div id="monthly-file-info" class="file-info hidden"></div>
+          </div>
+
+          <!-- DRファイル -->
+          <div class="upload-card upload-card-optional">
+            <div class="upload-card-header upload-card-header-dr">
+              <i class="fas fa-car"></i> DR距離計算フォーマット <span class="badge-optional">任意</span>
+            </div>
+            <div class="drop-zone" id="drop-dr">
+              <i class="fas fa-cloud-upload-alt drop-icon"></i>
+              <p>ここにドロップ<br>または</p>
+              <label class="btn btn-primary">
+                ファイルを選択
+                <input type="file" id="input-dr" accept=".xlsx,.xls" style="display:none">
+              </label>
+            </div>
+            <div id="dr-file-info" class="file-info hidden"></div>
+          </div>
+        </div>
+
+        <!-- 自動検出結果 -->
+        <div id="detected-info" class="detected-info hidden">
+          <h3><i class="fas fa-store"></i> 自動検出結果</h3>
+          <div class="detected-grid">
+            <div class="detected-item">
+              <span class="detected-label">店舗名</span>
+              <span id="detected-store" class="detected-value">-</span>
+            </div>
+            <div class="detected-item">
+              <span class="detected-label">対象年月</span>
+              <span id="detected-period" class="detected-value">-</span>
+            </div>
+            <div class="detected-item" id="detected-dr-item" style="display:none">
+              <span class="detected-label">DRファイル</span>
+              <span id="detected-dr" class="detected-value" style="color:var(--success)">読み込み済み</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-actions">
+          <button id="btn-step1-next" class="btn btn-primary btn-lg" disabled>
+            次へ：委託者情報取得 <i class="fas fa-arrow-right"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- ステップ2: 委託者情報取得 -->
+      <section id="step-2" class="step-section">
+        <h2 class="step-title"><i class="fas fa-users"></i> 委託者情報取得</h2>
+        <p class="step-desc">業務報告書から「業務委託」の方の情報を抽出します。</p>
+
+        <div id="step2-loading" class="loading-block hidden">
+          <i class="fas fa-spinner fa-spin"></i> 解析中...
+        </div>
+        <div id="contractors-list" class="data-table-wrap hidden"></div>
+        <div id="step2-warnings" class="warnings-block hidden"></div>
+
+        <div class="step-actions">
+          <button id="btn-step2-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
+          <button id="btn-step2-next" class="btn btn-primary btn-lg" disabled>
+            次へ：日払い突合 <i class="fas fa-arrow-right"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- ステップ3: 日払い突合 -->
+      <section id="step-3" class="step-section">
+        <h2 class="step-title"><i class="fas fa-balance-scale"></i> 日払い突合</h2>
+        <p class="step-desc">業務報告書・DRファイルの日払い額と月計表の取引入力を照合します。</p>
+
+        <div id="step3-loading" class="loading-block hidden">
+          <i class="fas fa-spinner fa-spin"></i> 突合処理中...
+        </div>
+
+        <!-- KPIカード -->
+        <div id="reconcile-kpi" class="kpi-row hidden">
+          <div class="kpi-card kpi-ok">
+            <div class="kpi-number" id="kpi-ok-count">0</div>
+            <div class="kpi-label">OK</div>
+          </div>
+          <div class="kpi-card kpi-ng">
+            <div class="kpi-number" id="kpi-ng-count">0</div>
+            <div class="kpi-label">NG（要確認）</div>
+          </div>
+          <div class="kpi-card" id="kpi-dr-card" style="border-left:4px solid var(--primary);display:none">
+            <div class="kpi-number" id="kpi-dr-count" style="color:var(--primary)">0</div>
+            <div class="kpi-label">DR件数</div>
+          </div>
+        </div>
+
+        <!-- タブ -->
+        <div class="tab-bar" id="reconcile-tabs">
+          <button class="tab-btn active" data-tab="tab-staff">
+            <i class="fas fa-user"></i> 業務委託
+          </button>
+          <button class="tab-btn" data-tab="tab-dr" id="tab-dr-btn" style="display:none">
+            <i class="fas fa-car"></i> DR
+          </button>
+        </div>
+
+        <!-- 業務委託タブ -->
+        <div id="tab-staff" class="tab-content active">
+          <div id="reconcile-list" class="data-table-wrap hidden"></div>
+        </div>
+
+        <!-- DRタブ -->
+        <div id="tab-dr" class="tab-content">
+          <div id="dr-reconcile-list" class="data-table-wrap hidden"></div>
+        </div>
+
+        <div class="step-actions">
+          <button id="btn-step3-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
+          <button id="btn-step3-next" class="btn btn-primary btn-lg">
+            次へ：前月差分チェック <i class="fas fa-arrow-right"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- ステップ4: 前月差分チェック -->
+      <section id="step-4" class="step-section">
+        <h2 class="step-title"><i class="fas fa-history"></i> 前月差分チェック</h2>
+        <p class="step-desc">先月のスナップショットと基本給・日払い・口座情報の変更を確認します。DRファイルがある場合はDRも差分チェックします。</p>
+
+        <!-- Step4 タブ -->
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="tab-diff-staff">
+            <i class="fas fa-user"></i> 業務委託
+          </button>
+          <button class="tab-btn" data-tab="tab-diff-dr" id="tab-diff-dr-btn" style="display:none">
+            <i class="fas fa-car"></i> DR
+          </button>
+        </div>
+
+        <div id="tab-diff-staff" class="tab-content active">
+          <div id="diff-staff-list" class="data-table-wrap"></div>
+        </div>
+        <div id="tab-diff-dr" class="tab-content">
+          <div id="diff-dr-list" class="data-table-wrap"></div>
+        </div>
+
+        <div class="step-actions">
+          <button id="btn-step4-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
+          <button id="btn-step4-next" class="btn btn-primary btn-lg">
+            次へ：内勤請求出力 <i class="fas fa-arrow-right"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- ステップ5: 出力 -->
+      <section id="step-5" class="step-section">
+        <h2 class="step-title"><i class="fas fa-file-download"></i> 内勤請求出力</h2>
+        <p class="step-desc">業務報告書・DR距離計算フォーマットの個人タブをそのままコピーして出力します。書式・色・罫線が元ファイルと完全一致します。</p>
+
+        <!-- Step5 タブ -->
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="tab-output-staff">
+            <i class="fas fa-user"></i> 業務委託
+          </button>
+          <button class="tab-btn" data-tab="tab-output-dr" id="tab-output-dr-btn" style="display:none">
+            <i class="fas fa-car"></i> DR
+          </button>
+        </div>
+
+        <div id="tab-output-staff" class="tab-content active">
+          <div id="invoice-preview-staff" class="data-table-wrap"></div>
+        </div>
+        <div id="tab-output-dr" class="tab-content">
+          <div id="invoice-preview-dr" class="data-table-wrap"></div>
+        </div>
+
+        <div class="note-box">
+          <i class="fas fa-info-circle"></i>
+          <strong>元ファイルの個人タブをそのままコピーして出力します。</strong><br>
+          業務委託: 業務報告書の各個人タブ（折原・川原 等）をコピー。<br>
+          DR: 距離計算フォーマットの各個人タブ（加藤・★能條 等）をコピー。<br>
+          書式・罫線・色・結合はすべて元ファイルと完全一致します。
+        </div>
+
+        <div class="step-actions">
+          <button id="btn-step5-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
+          <button id="btn-step5-download" class="btn btn-success btn-lg">
+            <i class="fas fa-download"></i> 内勤請求Excelをダウンロード
+          </button>
+          <button id="btn-step5-dr-download" class="btn btn-primary btn-lg" style="display:none">
+            <i class="fas fa-car"></i> DR請求Excelをダウンロード
+          </button>
+        </div>
+      </section>
+
+    </main>
+    <div id="toast-container"></div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/parser-report.js"></script>
+  <script src="js/parser-monthly.js"></script>
+  <script src="js/parser-dr.js"></script>
+  <script src="js/reconcile.js"></script>
+  <script src="js/diff.js"></script>
+  <script src="js/output.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // サイバーパンク時計
+    function updateClock() {
+      const el = document.getElementById('header-clock');
+      if (!el) return;
+      const now = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      el.textContent = `SYS_TIME: ${now.getFullYear()}.${pad(now.getMonth()+1)}.${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+  </script>
+</body>
+</html>
