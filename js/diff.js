@@ -211,36 +211,23 @@ function checkDiff(currentContractors, prevContractors) {
 
 /**
  * 人名→キーのマップを作成
- * ルール: 基本は苗字。同姓が複数いる場合はフルネームをキーにする。
+ * ルール: 常に normalizePersonName（フルネーム正規化）をキーとして使う。
+ * 同姓混同を防ぐため苗字だけのキーは使わない。
  */
 function buildPersonMap(people) {
-  // まず苗字の重複チェック
-  const surnameCount = {};
-  for (const p of people) {
-    const surname = getSurname(normalizePersonName(p.name));
-    surnameCount[surname] = (surnameCount[surname] || 0) + 1;
-  }
-
   const map = {};
   for (const p of people) {
-    const normalized = normalizePersonName(p.name);
-    const surname = getSurname(normalized);
-    // 同姓が複数いる場合はフルネームをキーにする
-    const key = surnameCount[surname] > 1 ? normalized : surname;
+    const key = normalizePersonName(p.name);
     map[key] = p;
   }
   return map;
 }
 
 /**
- * 人物のキーを解決する（buildPersonMapと同じロジック）
+ * 人物のキーを解決する（フルネーム正規化で統一）
  */
 function resolvePersonKey(name, personMap) {
-  const normalized = normalizePersonName(name);
-  const surname = getSurname(normalized);
-  // 苗字キーが存在すればそれを使う、なければフルネームで試みる
-  if (personMap[surname] !== undefined) return surname;
-  return normalized;
+  return normalizePersonName(name);
 }
 
 /**
