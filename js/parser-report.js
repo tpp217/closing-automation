@@ -73,6 +73,8 @@ async function parseReport(buffer) {
     const bankResult = extractBankFromPersonSheet(wb, person.name);
     person.bank          = bankResult.bank;
     person.sheetName     = bankResult.sheetName || null;
+    person.companyName   = bankResult.companyName  ?? null;
+    person.invoiceDate   = bankResult.invoiceDate  ?? null;
     person.officeRentYen = bankResult.officeRentYen ?? 0;
     person.otherItems    = bankResult.otherItems  ?? [];
     if (bankResult.warnings.length) {
@@ -285,7 +287,8 @@ function extractBankFromPersonSheet(wb, personName) {
   // ── 個人タブの明細から事務所レンタル料・その他を取得 ──
   const { officeRentYen, otherItems } = extractDetailItems(ws);
 
-  return { bank, sheetName, officeRentYen, otherItems, warnings };
+  const { companyName, invoiceDate } = extractCompanyAndDate(ws);
+  return { bank, sheetName, officeRentYen, otherItems, companyName, invoiceDate, warnings };
 }
 
 // C12検索用除外パターン（丸数字シートは除外しない＝C12で氏名を持つ個人タブを検索対象にする）
@@ -484,6 +487,43 @@ function extractDetailItems(ws) {
   }
 
   return { officeRentYen, otherItems };
+}
+
+/**
+ * 個人タブから会社名・明細日付を取得
+ * 個人タブの先頭付近（行0〜30）に「株式会社」「有限会社」等が含まれるセルを会社名とみなす
+ * 日付は「年」を含む数値セルまたは日付セルを探す
+ */
+function extractCompanyAndDate(ws) {
+  if (!ws || !ws['!ref']) return { companyName: null, invoiceDate: null };
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const endRow = Math.min(30, range.e.r);
+  let companyName = null;
+  let invoiceDate = null;
+
+  for (let r = 0; r <= endRow; r++) {
+    for (let c = 0; c <= range.e.c; c++) {
+      const v = getCellValue(ws, r, c);
+      if (!v) continue;
+      const s = String(v).trim();
+      // 会社名: 株式会社・有限会社・合同会社・合名会社・合資会社 を含む
+      if (!companyName && /株式会社|有限会社|合同会社|合名会社|合資会社/.test(s)) {
+        companyName = s;
+      }
+      // 日付: セルが日付型 または 「年」を含む文字列
+      if (!invoiceDate) {
+        const cell = ws[XLSX.utils.encode_cell({ r, c })];
+        if (cell && cell.t === 'd') {
+          const d = new Date(cell.v);
+          invoiceDate = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+        } else if (typeof s === 'string' && /\d{4}年\d{1,2}月/.test(s)) {
+          invoiceDate = s;
+        }
+      }
+    }
+    if (companyName && invoiceDate) break;
+  }
+  return { companyName, invoiceDate };
 }
 
 /** 行の指定列以降を走査して最初に見つかった数値を返す */

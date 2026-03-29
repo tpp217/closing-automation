@@ -129,6 +129,38 @@ function checkDiff(currentContractors, prevContractors) {
         isManualApproved: false
       });
     }
+
+    // ── 会社名（明細書）チェック ──
+    const currCompany = normText(String(c.companyName ?? ''));
+    const prevCompany = normText(String(prev.companyName ?? ''));
+    if (currCompany !== prevCompany) {
+      results.push({
+        name: c.name, personKey: key,
+        type: 'COMPANY_CHANGE',
+        severity: 'alert',
+        label: '会社名変更（要確認）',
+        before: prevCompany || '（空）',
+        after:  currCompany || '（空）',
+        details: '明細書の会社名が変更されました',
+        isManualApproved: false
+      });
+    }
+
+    // ── 日付（明細書）チェック ──
+    const currDate = normText(String(c.invoiceDate ?? ''));
+    const prevDate = normText(String(prev.invoiceDate ?? ''));
+    if (currDate !== prevDate) {
+      results.push({
+        name: c.name, personKey: key,
+        type: 'DATE_CHANGE',
+        severity: 'alert',
+        label: '日付変更（要確認）',
+        before: prevDate || '（空）',
+        after:  currDate || '（空）',
+        details: '明細書の日付が変更されました',
+        isManualApproved: false
+      });
+    }
   }
 
   // 先月いたが今月いない人

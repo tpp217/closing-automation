@@ -167,24 +167,31 @@
         <h2 class="step-title"><i class="fas fa-users"></i> 委託者情報取得</h2>
         <p class="step-desc">業務報告書から全員の情報を抽出します。「業務委託」タブと「その他」タブに分けて表示します。</p>
 
-        <div id="step2-loading" class="loading-block hidden">
-          <i class="fas fa-spinner fa-spin"></i> 解析中...
-        </div>
-        <div id="contractors-list" class="data-table-wrap hidden"></div>
-        <div id="step2-warnings" class="warnings-block hidden"></div>
-
         <div class="step-actions">
           <button id="btn-step2-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
           <button id="btn-step2-next" class="btn btn-primary btn-lg" disabled>
             次へ：日払い突合 <i class="fas fa-arrow-right"></i>
           </button>
         </div>
+
+        <div id="step2-loading" class="loading-block hidden">
+          <i class="fas fa-spinner fa-spin"></i> 解析中...
+        </div>
+        <div id="contractors-list" class="data-table-wrap hidden"></div>
+        <div id="step2-warnings" class="warnings-block hidden"></div>
       </section>
 
       <!-- ステップ3: 日払い突合 -->
       <section id="step-3" class="step-section">
         <h2 class="step-title"><i class="fas fa-balance-scale"></i> 日払い突合</h2>
         <p class="step-desc">業務報告書・DRファイルの日払い額と月計表の取引入力を照合します。</p>
+
+        <div class="step-actions">
+          <button id="btn-step3-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
+          <button id="btn-step3-next" class="btn btn-primary btn-lg">
+            次へ：前月差分チェック <i class="fas fa-arrow-right"></i>
+          </button>
+        </div>
 
         <div id="step3-loading" class="loading-block hidden">
           <i class="fas fa-spinner fa-spin"></i> 突合処理中...
@@ -225,19 +232,19 @@
         <div id="tab-dr" class="tab-content">
           <div id="dr-reconcile-list" class="data-table-wrap hidden"></div>
         </div>
-
-        <div class="step-actions">
-          <button id="btn-step3-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
-          <button id="btn-step3-next" class="btn btn-primary btn-lg">
-            次へ：前月差分チェック <i class="fas fa-arrow-right"></i>
-          </button>
-        </div>
       </section>
 
       <!-- ステップ4: 前月差分チェック -->
       <section id="step-4" class="step-section">
         <h2 class="step-title"><i class="fas fa-history"></i> 前月差分チェック</h2>
         <p class="step-desc">先月のスナップショットと役職・基本給・振込先情報の変更を確認します。DRファイルがある場合はDRも差分チェックします。</p>
+
+        <div class="step-actions">
+          <button id="btn-step4-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
+          <button id="btn-step4-next" class="btn btn-primary btn-lg">
+            次へ：内勤請求出力 <i class="fas fa-arrow-right"></i>
+          </button>
+        </div>
 
         <!-- Step4 タブ -->
         <div class="tab-bar">
@@ -255,19 +262,25 @@
         <div id="tab-diff-dr" class="tab-content">
           <div id="diff-dr-list" class="data-table-wrap"></div>
         </div>
-
-        <div class="step-actions">
-          <button id="btn-step4-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
-          <button id="btn-step4-next" class="btn btn-primary btn-lg">
-            次へ：内勤請求出力 <i class="fas fa-arrow-right"></i>
-          </button>
-        </div>
       </section>
 
       <!-- ステップ5: 出力 -->
       <section id="step-5" class="step-section">
         <h2 class="step-title"><i class="fas fa-file-download"></i> 内勤請求出力</h2>
         <p class="step-desc">業務報告書・DR距離計算フォーマットの個人タブをそのままコピーして出力します。書式・色・罫線が元ファイルと完全一致します。</p>
+
+        <div class="step-actions">
+          <button id="btn-step5-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
+          <button id="btn-step5-download" class="btn btn-success btn-lg">
+            <i class="fas fa-download"></i> 内勤請求Excelをダウンロード
+          </button>
+          <button id="btn-step5-dr-download" class="btn btn-primary btn-lg" style="display:none">
+            <i class="fas fa-car"></i> DR請求Excelをダウンロード
+          </button>
+          <button id="btn-step5-restart" class="btn btn-outline btn-lg">
+            <i class="fas fa-redo"></i> 最初に戻る（STEP1）
+          </button>
+        </div>
 
         <!-- Step5 タブ -->
         <div class="tab-bar">
@@ -292,16 +305,6 @@
           業務委託: 業務報告書の各個人タブ（折原・川原 等）をコピー。<br>
           DR: 距離計算フォーマットの各個人タブ（加藤・★能條 等）をコピー。<br>
           書式・罫線・色・結合はすべて元ファイルと完全一致します。
-        </div>
-
-        <div class="step-actions">
-          <button id="btn-step5-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
-          <button id="btn-step5-download" class="btn btn-success btn-lg">
-            <i class="fas fa-download"></i> 内勤請求Excelをダウンロード
-          </button>
-          <button id="btn-step5-dr-download" class="btn btn-primary btn-lg" style="display:none">
-            <i class="fas fa-car"></i> DR請求Excelをダウンロード
-          </button>
         </div>
       </section>
 

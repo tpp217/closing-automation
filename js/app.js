@@ -787,6 +787,7 @@ function setupStep5() {
   $('btn-step5-back').addEventListener('click', () => goToStep(4));
   $('btn-step5-download').addEventListener('click', handleDownload);
   $('btn-step5-dr-download').addEventListener('click', handleDRDownload);
+  $('btn-step5-restart').addEventListener('click', () => goToStep(1));
 }
 
 function runStep5() {
