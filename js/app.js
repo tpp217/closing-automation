@@ -1444,47 +1444,86 @@ function renderSnapDiffTab(currentRows, prevRows, prevYm) {
     return;
   }
 
-  // 前月マップ（氏名キー）
+  // 前月マップ（person_keyで照合）
   const prevMap = {};
   prevRows.forEach(r => { prevMap[r.person_key] = r; });
 
   const diffs = [];
+
   for (const r of currentRows) {
     const prev = prevMap[r.person_key];
     if (!prev) {
-      diffs.push({ name: r.person_name, label: '新規追加', before: '-', after: r.role || '-', severity: 'alert' });
+      diffs.push({ name: r.person_name, label: '新規追加', before: '-', after: r.role || '-', severity: 'info' });
       continue;
     }
-    if (Number(r.basic_pay_man) !== Number(prev.basic_pay_man))
+
+    let hasChange = false;
+
+    // 役職
+    if ((r.role || '') !== (prev.role || '')) {
+      diffs.push({ name: r.person_name, label: '役職変更', before: prev.role || '（空）', after: r.role || '（空）', severity: 'alert' });
+      hasChange = true;
+    }
+    // 基本給
+    if (Number(r.basic_pay_man) !== Number(prev.basic_pay_man)) {
       diffs.push({ name: r.person_name, label: '基本給変更', before: `${prev.basic_pay_man}万円`, after: `${r.basic_pay_man}万円`, severity: 'alert' });
-    if (Number(r.daily_pay_yen) !== Number(prev.daily_pay_yen))
-      diffs.push({ name: r.person_name, label: '日払い変更', before: formatYen(prev.daily_pay_yen), after: formatYen(r.daily_pay_yen), severity: 'alert' });
-    if (r.account_number && prev.account_number && r.account_number !== prev.account_number)
-      diffs.push({ name: r.person_name, label: '口座番号変更', before: '****' + String(prev.account_number).slice(-4), after: '****' + String(r.account_number).slice(-4), severity: 'alert' });
-    if (r.bank_name !== prev.bank_name && r.bank_name)
-      diffs.push({ name: r.person_name, label: '銀行変更', before: prev.bank_name || '-', after: r.bank_name, severity: 'alert' });
+      hasChange = true;
+    }
+    // 振込先（銀行名・支店名・口座種別・口座番号・名義カナ）
+    const bankFields = [
+      { key: 'bank_name',           label: '銀行名' },
+      { key: 'branch_name',         label: '支店名' },
+      { key: 'account_type',        label: '口座種別' },
+      { key: 'account_number',      label: '口座番号' },
+      { key: 'account_holder_kana', label: '名義カナ' }
+    ];
+    for (const f of bankFields) {
+      const cv = String(r[f.key] ?? '');
+      const pv = String(prev[f.key] ?? '');
+      if (cv !== pv) {
+        const dispBefore = f.key === 'account_number' ? ('****' + pv.slice(-4)) : (pv || '-');
+        const dispAfter  = f.key === 'account_number' ? ('****' + cv.slice(-4)) : (cv || '-');
+        diffs.push({ name: r.person_name, label: `振込先変更（${f.label}）`, before: dispBefore, after: dispAfter, severity: 'alert' });
+        hasChange = true;
+      }
+    }
+    // 会社名
+    if ((r.company_name || '') !== (prev.company_name || '')) {
+      diffs.push({ name: r.person_name, label: '会社名変更', before: prev.company_name || '（空）', after: r.company_name || '（空）', severity: 'alert' });
+      hasChange = true;
+    }
+    // 日付
+    if ((r.invoice_date || '') !== (prev.invoice_date || '')) {
+      diffs.push({ name: r.person_name, label: '日付変更', before: prev.invoice_date || '（空）', after: r.invoice_date || '（空）', severity: 'alert' });
+      hasChange = true;
+    }
+
+    if (!hasChange) {
+      diffs.push({ name: r.person_name, label: '変更なし', before: '-', after: '-', severity: 'ok' });
+    }
   }
-  // 退職者
+
+  // 退職者（今月いない人）
   const currentKeys = new Set(currentRows.map(r => r.person_key));
   for (const r of prevRows) {
     if (!currentKeys.has(r.person_key))
-      diffs.push({ name: r.person_name, label: '退職／削除', before: r.role || '-', after: '-', severity: 'alert' });
+      diffs.push({ name: r.person_name, label: '削除', before: r.role || '-', after: '-', severity: 'info' });
   }
 
-  if (!diffs.length) {
-    el.innerHTML = '<div style="padding:1.5rem;text-align:center;font-family:var(--font-mono);font-size:0.75rem;color:var(--neon)">[ 差分なし ] 前月から変更はありません</div>';
-    return;
-  }
+  // alertを先頭に
+  const order = { alert: 0, info: 1, ok: 2 };
+  diffs.sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
 
   const t = document.createElement('table');
   t.innerHTML = `<thead><tr><th>氏名</th><th>変更種別</th><th>変更前</th><th>変更後</th></tr></thead>`;
   const tb = document.createElement('tbody');
   diffs.forEach(d => {
     const tr = document.createElement('tr');
-    tr.classList.add('snap-row-ng');
+    if (d.severity === 'alert') tr.classList.add('snap-row-ng');
     [d.name].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
     const labelTd = document.createElement('td');
-    labelTd.innerHTML = `<span class="badge badge-ng">${escapeHtml(d.label)}</span>`;
+    const badgeClass = d.severity === 'alert' ? 'badge-ng' : d.severity === 'info' ? 'badge-gray' : 'badge-ok';
+    labelTd.innerHTML = `<span class="badge ${badgeClass}">${escapeHtml(d.label)}</span>`;
     tr.appendChild(labelTd);
     [d.before, d.after].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
     tb.appendChild(tr);
