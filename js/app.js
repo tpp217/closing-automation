@@ -759,7 +759,7 @@ function setupStep5() {
 
 function runStep5() {
   // DRファイルがある場合のみDRダウンロードボタンを表示
-  if (AppState.drList && AppState.drList.length > 0) {
+  if (AppState.drBuffer) {
     $('btn-step5-dr-download').style.display = '';
   } else {
     $('btn-step5-dr-download').style.display = 'none';

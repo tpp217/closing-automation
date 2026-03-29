@@ -305,24 +305,6 @@ function checkDRDiff(currentDrList, prevDrList) {
       continue;
     }
 
-    // ── ドライバー報酬チェック ──
-    const currReward = Number(c.driverReward ?? 0);
-    const prevReward = Number(prev.driverReward ?? 0);
-    if (currReward !== prevReward) {
-      const delta = currReward - prevReward;
-      results.push({
-        name: c.name,
-        personKey: key,
-        type: 'REWARD_CHANGE',
-        severity: 'alert',
-        label: 'ドライバー報酬変更（要確認）',
-        before: formatYen(prevReward),
-        after:  formatYen(currReward),
-        details: `差分: ${delta > 0 ? '+' : ''}${formatYen(delta)}`,
-        isManualApproved: false
-      });
-    }
-
     // ── 振込先情報チェック ──
     const currBank = c.bank || {};
     const prevBank = prev.bank || {};

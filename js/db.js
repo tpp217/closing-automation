@@ -131,6 +131,8 @@ async function saveSnapshot(allPeople, storeName, periodYm, reconcileResults = [
       account_type:          c.bank?.accountType ?? '',
       account_number:        c.bank?.accountNumber ?? '',
       account_holder_kana:   c.bank?.accountHolderKana ?? '',
+      company_name:          c.companyName ?? '',
+      invoice_date:          c.invoiceDate ?? '',
       reconcile_status:      rec.status ?? 'NONE',
       reconcile_reason:      rec.reason ?? '',
       reconcile_monthly_yen: rec.monthlyDailyPayYen ?? 0,
@@ -169,6 +171,8 @@ function rowToContractor(r) {
       accountNumber:      r.account_number      ?? '',
       accountHolderKana:  r.account_holder_kana ?? ''
     },
+    companyName:          r.company_name        ?? '',
+    invoiceDate:          r.invoice_date        ?? '',
     reconcileStatus:      r.reconcile_status      ?? 'NONE',
     reconcileReason:      r.reconcile_reason      ?? '',
     reconcileMonthlyYen:  Number(r.reconcile_monthly_yen ?? 0),
