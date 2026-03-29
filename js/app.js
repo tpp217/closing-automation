@@ -221,8 +221,8 @@ function renderContractorsTable(people) {
     roleDisplay:          c.role || '（不明）',
     basicPayManDisplay:   `${c.basicPayMan ?? 0}万円`,
     raiseRequestDisplay:  (c.raiseRequestMan ?? 0) > 0 ? `${c.raiseRequestMan}万円` : '-',
-    oiriDisplay:          (c.oiriMan ?? 0) > 0 ? `${c.oiriMan}万円` : '-',   // 大入りは万円単位
-    dailyPayYenDisplay:   (c.dailyPayYen ?? 0) > 0 ? formatYen(c.dailyPayYen) : '-',  // 日払いのみ円
+    oiriDisplay:          (c.oiriMan ?? 0) > 0 ? `${c.oiriMan}万円` : '-',
+    dailyPayYenDisplay:   (c.dailyPayYen ?? 0) > 0 ? formatYen(c.dailyPayYen) : '-',
     officeRentDisplay:    (c.officeRentYen ?? 0) > 0 ? formatYen(c.officeRentYen) : '-',
     otherDisplay:         (c.otherItems ?? []).length > 0
                             ? c.otherItems.map(o => `${o.label}:${formatYen(o.amount)}`).join(' / ')
@@ -231,65 +231,100 @@ function renderContractorsTable(people) {
     warningBadge:         (c.warnings?.length ?? 0) > 0 ? `⚠ ${c.warnings.length}件` : '✓'
   }));
 
-  // 業務委託を上、社員を下に並び替え
-  rowData.sort((a, b) => {
-    if (a._isContractor && !b._isContractor) return -1;
-    if (!a._isContractor && b._isContractor) return 1;
-    return 0;
-  });
+  // タブ分け用: 業務委託 / その他（それ以外）
+  const contractors = rowData.filter(r => r._isContractor);
+  const others      = rowData.filter(r => !r._isContractor);
 
-  const table = buildTable(headers, rowData, row => {
-    const tr = document.createElement('tr');
-    headers.forEach(h => {
-      const td = document.createElement('td');
-      if (h.key === 'roleDisplay') {
-        // 役職バッジ（一行表示・長い場合はホバーで全文表示）
-        const span = document.createElement('span');
-        span.className = row._isContractor ? 'badge badge-ok' : 'badge badge-gray';
-        span.textContent = row[h.key];
-        span.title = row[h.key]; // ホバー時にフルテキスト表示
-        td.style.whiteSpace = 'nowrap';
-        td.appendChild(span);
-      } else if (h.key === 'warningBadge') {
-        const span = document.createElement('span');
-        const hasWarn = (row.warnings?.length > 0);
-        span.className = hasWarn ? 'badge badge-warn' : 'badge badge-ok';
-        span.textContent = row[h.key];
-        td.appendChild(span);
-      } else if (h.key === 'name') {
-        td.textContent = row[h.key] ?? '';
-        td.style.fontWeight = row._isContractor ? '700' : '400';
-        if (!row._isContractor) td.style.color = 'var(--text-muted)';
-      } else if (h.key === 'otherDisplay') {
-        // 「その他」は折り返しあり
-        td.className = 'td-wrap';
-        td.textContent = (row[h.key] === null || row[h.key] === undefined) ? '' : row[h.key];
-      } else {
-        td.textContent = (row[h.key] === null || row[h.key] === undefined) ? '' : row[h.key];
-      }
-      if (h.align) td.style.textAlign = h.align;
-      // 社員行は全体的にミュート
-      if (!row._isContractor) td.style.opacity = '0.55';
-      tr.appendChild(td);
-    });
-    return tr;
-  });
-
-  // 件数サマリーヘッダー
-  const contractorCount2 = rowData.filter(r => r._isContractor).length;
-  const employeeCount    = rowData.filter(r => !r._isContractor).length;
+  // 件数サマリー
   const summary = document.createElement('div');
   summary.style.cssText = 'padding:0.7rem 1rem; border-bottom:1px solid var(--border); display:flex; gap:1rem; align-items:center; font-size:0.78rem;';
   summary.innerHTML = `
     <span style="color:var(--text-muted)">合計 <strong style="color:var(--text-primary)">${rowData.length}名</strong></span>
-    <span class="badge badge-ok">業務委託 ${contractorCount2}名</span>
-    <span class="badge badge-gray">社員 ${employeeCount}名</span>
+    <span class="badge badge-ok">業務委託 ${contractors.length}名</span>
+    <span class="badge badge-gray">その他 ${others.length}名</span>
   `;
+
+  // タブバー
+  const tabBar = document.createElement('div');
+  tabBar.className = 'tab-bar';
+  tabBar.innerHTML = `
+    <button class="tab-btn active" data-ctab="tab-c2-contractor"><i class="fas fa-user-check"></i> 業務委託</button>
+    <button class="tab-btn" data-ctab="tab-c2-other"><i class="fas fa-users"></i> その他</button>
+  `;
+
+  // テーブル生成ヘルパー
+  function buildPeopleTable(rows) {
+    const table = buildTable(headers, rows, row => {
+      const tr = document.createElement('tr');
+      headers.forEach(h => {
+        const td = document.createElement('td');
+        if (h.key === 'roleDisplay') {
+          const span = document.createElement('span');
+          span.className = row._isContractor ? 'badge badge-ok' : 'badge badge-gray';
+          span.textContent = row[h.key];
+          span.title = row[h.key];
+          td.style.whiteSpace = 'nowrap';
+          td.appendChild(span);
+        } else if (h.key === 'warningBadge') {
+          const span = document.createElement('span');
+          const hasWarn = (row.warnings?.length > 0);
+          span.className = hasWarn ? 'badge badge-warn' : 'badge badge-ok';
+          span.textContent = row[h.key];
+          td.appendChild(span);
+        } else if (h.key === 'name') {
+          td.textContent = row[h.key] ?? '';
+          td.style.fontWeight = '600';
+        } else if (h.key === 'otherDisplay') {
+          td.className = 'td-wrap';
+          td.textContent = (row[h.key] === null || row[h.key] === undefined) ? '' : row[h.key];
+        } else {
+          td.textContent = (row[h.key] === null || row[h.key] === undefined) ? '' : row[h.key];
+        }
+        if (h.align) td.style.textAlign = h.align;
+        tr.appendChild(td);
+      });
+      return tr;
+    });
+    return table;
+  }
+
+  // 各タブコンテンツ
+  const tabContractor = document.createElement('div');
+  tabContractor.id = 'tab-c2-contractor';
+  tabContractor.className = 'tab-content active';
+  if (contractors.length === 0) {
+    tabContractor.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--gray-400)">業務委託者がいません</div>';
+  } else {
+    tabContractor.appendChild(buildPeopleTable(contractors));
+  }
+
+  const tabOther = document.createElement('div');
+  tabOther.id = 'tab-c2-other';
+  tabOther.className = 'tab-content';
+  if (others.length === 0) {
+    tabOther.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--gray-400)">その他の方はいません</div>';
+  } else {
+    tabOther.appendChild(buildPeopleTable(others));
+  }
 
   wrap.innerHTML = '';
   wrap.appendChild(summary);
-  wrap.appendChild(table);
+  wrap.appendChild(tabBar);
+  wrap.appendChild(tabContractor);
+  wrap.appendChild(tabOther);
   show(wrap);
+
+  // タブ切り替えイベント（この要素内のみ）
+  tabBar.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabBar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const targetId = btn.dataset.ctab;
+      [tabContractor, tabOther].forEach(el => el.classList.remove('active'));
+      const target = document.getElementById(targetId);
+      if (target) target.classList.add('active');
+    });
+  });
 }
 
 function maskAccountDisplay(num) {
@@ -565,9 +600,9 @@ async function runStep4() {
 
     let diffResults;
     if (prevContractors.length === 0) {
-      diffResults = checkDiffFirstTime(AppState.contractors);
+      diffResults = checkDiffFirstTime(AppState.allPeople);
     } else {
-      diffResults = checkDiff(AppState.contractors, prevContractors);
+      diffResults = checkDiff(AppState.allPeople, prevContractors);
     }
     AppState.diffResults = diffResults;
     renderDiffTable('diff-staff-list', diffResults, prevContractors.length === 0, AppState.contractors, 'contractors');
@@ -937,7 +972,7 @@ function renderDRReconcileTable(results) {
   const table = document.createElement('table');
   const thead = document.createElement('thead');
   const headRow = document.createElement('tr');
-  ['DRタブ名', '氏名', '月計表の科目（元データ）', 'DRファイル仮払', '月計表 日払い', 'ドライバー報酬', '判定', '理由', '承認'].forEach(label => {
+  ['DRタブ名', '氏名', '月計表の科目（元データ）', 'DRファイル仮払', '月計表 日払い', 'ドライバー報酬', '適格請求支払手数料チェック', '判定', '理由', '承認'].forEach(label => {
     const th = document.createElement('th');
     th.textContent = label;
     headRow.appendChild(th);
@@ -989,6 +1024,20 @@ function renderDRReconcileTable(results) {
     rewardTd.style.textAlign = 'right';
     rewardTd.textContent = r.driverReward !== null ? formatYen(r.driverReward) : '—';
     tr.appendChild(rewardTd);
+
+    // 適格請求支払手数料チェック
+    const feeTd = document.createElement('td');
+    feeTd.style.textAlign = 'center';
+    if (!r.feeCheck) {
+      feeTd.innerHTML = '<span class="badge badge-gray">—</span>';
+    } else if (r.feeCheck.ok) {
+      feeTd.innerHTML = `<span class="badge badge-ok"><i class="fas fa-check"></i> OK</span>
+        <div style="font-size:0.75rem;color:var(--gray-500);margin-top:2px">${formatYen(r.feeCheck.actual)}</div>`;
+    } else {
+      feeTd.innerHTML = `<span class="badge badge-ng"><i class="fas fa-times"></i> NG</span>
+        <div style="font-size:0.75rem;color:var(--danger);margin-top:2px">実: ${formatYen(r.feeCheck.actual)} / 期待: ${formatYen(r.feeCheck.expected)}</div>`;
+    }
+    tr.appendChild(feeTd);
 
     // 判定
     const statusTd = document.createElement('td');

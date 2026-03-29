@@ -1,32 +1,30 @@
 /**
  * diff.js - 前月差分チェックロジック
- * 
- * 対象: 基本給（万円）・日払い（属性/額）・口座情報
- * 
- * 判定ルール:
- * - 基本給増加: delta > 0 → INCREASE（要確認）
- * - 基本給減少: delta < 0 → DECREASE（要確認）
- * - 口座情報変更: 銀行/支店/種別/番号/名義カナのいずれか変更 → BANK_CHANGE（要確認）
- * - 日払い属性変更: 0↔>0 → DAILY_MODE_CHANGE（要確認）
- * - 新規追加: 先月なし → NEW（情報）
- * - 削除: 今月なし先月あり → REMOVED（情報）
+ *
+ * チェック項目（仕様）:
+ * - 役職（role）
+ * - 基本給（basicPayMan）
+ * - 振込先情報（bank全体）
+ * - 新規追加 / 削除
+ *
+ * 判定: 先月と違うかどうか（アラートレベル細分化なし）
  */
 
 'use strict';
 
 /**
  * 前月差分チェックを実行
- * @param {Array} currentContractors - 今月の委託者リスト
+ * @param {Array} currentContractors - 今月の全員リスト（業務委託＋社員）
  * @param {Array} prevContractors - 先月のスナップショット（DBから取得）
  * @returns {Array} diffResults
- * 
+ *
  * 各要素:
  * {
  *   name: string,
  *   personKey: string,
- *   type: 'BASIC_PAY_INCREASE'|'BASIC_PAY_DECREASE'|'BANK_CHANGE'|'DAILY_MODE_CHANGE'|'NEW'|'REMOVED'|'NO_CHANGE',
+ *   type: 'ROLE_CHANGE'|'BASIC_PAY_CHANGE'|'BANK_CHANGE'|'NEW'|'REMOVED'|'NO_CHANGE',
  *   severity: 'alert'|'info'|'ok',
- *   label: string,          // 表示用ラベル
+ *   label: string,
  *   before: any,
  *   after: any,
  *   details: string,
@@ -36,27 +34,16 @@
 function checkDiff(currentContractors, prevContractors) {
   const results = [];
 
-  // 先月データをキーでマップ化
-  const prevMap = {};
-  for (const p of prevContractors) {
-    const key = getSurname(normalizePersonName(p.name));
-    prevMap[key] = p;
-  }
+  // 先月データをキーでマップ化（同姓考慮）
+  const prevMap = buildPersonMap(prevContractors);
+  const currMap = buildPersonMap(currentContractors);
 
-  // 今月データをキーでマップ化
-  const currMap = {};
+  // 今月の全員を確認
   for (const c of currentContractors) {
-    const key = getSurname(normalizePersonName(c.name));
-    currMap[key] = c;
-  }
-
-  // 今月の委託者を確認
-  for (const c of currentContractors) {
-    const key = getSurname(normalizePersonName(c.name));
+    const key = resolvePersonKey(c.name, currMap);
     const prev = prevMap[key];
 
     if (!prev) {
-      // 新規（先月なし）
       results.push({
         name: c.name,
         personKey: key,
@@ -64,127 +51,109 @@ function checkDiff(currentContractors, prevContractors) {
         severity: 'info',
         label: '新規追加',
         before: null,
-        after: null,
-        details: `先月のデータがありません（今月から新たに業務委託として登録）`,
+        after: c.role || null,
+        details: '先月のデータがありません（今月から新たに登録）',
         isManualApproved: false
       });
       continue;
     }
 
-    // 基本給チェック
+    // ── 役職チェック ──
+    const currRole = normText(String(c.role ?? ''));
+    const prevRole = normText(String(prev.role ?? ''));
+    if (currRole !== prevRole) {
+      results.push({
+        name: c.name,
+        personKey: key,
+        type: 'ROLE_CHANGE',
+        severity: 'alert',
+        label: '役職変更（要確認）',
+        before: prevRole || '（空）',
+        after:  currRole || '（空）',
+        details: '役職が変更されました',
+        isManualApproved: false
+      });
+    }
+
+    // ── 基本給チェック ──
     const currBasic = Number(c.basicPayMan ?? 0);
     const prevBasic = Number(prev.basicPayMan ?? 0);
     if (currBasic !== prevBasic) {
-      const delta = currBasic - prevBasic;
+      const delta    = currBasic - prevBasic;
       const deltaYen = Math.round(delta * 10000);
       results.push({
         name: c.name,
         personKey: key,
-        type: delta > 0 ? 'BASIC_PAY_INCREASE' : 'BASIC_PAY_DECREASE',
+        type: 'BASIC_PAY_CHANGE',
         severity: 'alert',
-        label: delta > 0 ? '昇給（要確認）' : '減給（要確認）',
+        label: '基本給変更（要確認）',
         before: `${prevBasic}万円`,
-        after: `${currBasic}万円`,
+        after:  `${currBasic}万円`,
         details: `差分: ${delta > 0 ? '+' : ''}${delta}万円（${delta > 0 ? '+' : ''}${deltaYen.toLocaleString()}円）`,
         isManualApproved: false
       });
     }
 
-    // 日払い属性変更チェック（0↔>0）
-    const currDaily = Number(c.dailyPayYen ?? 0);
-    const prevDaily = Number(prev.dailyPayYen ?? 0);
-    const currIsDaily = currDaily > 0;
-    const prevIsDaily = prevDaily > 0;
-    if (currIsDaily !== prevIsDaily) {
-      results.push({
-        name: c.name,
-        personKey: key,
-        type: 'DAILY_MODE_CHANGE',
-        severity: 'alert',
-        label: '日払い設定変更（要確認）',
-        before: prevIsDaily ? `日払いあり（${formatYen(prevDaily)}）` : '日払いなし',
-        after: currIsDaily ? `日払いあり（${formatYen(currDaily)}）` : '日払いなし',
-        details: prevIsDaily ? '日払い → 日払いなし に変更されました' : '日払いなし → 日払い に変更されました',
-        isManualApproved: false
-      });
-    } else if (currDaily !== prevDaily && currDaily > 0) {
-      // 日払い額の変更（両方>0だが金額が違う）
-      results.push({
-        name: c.name,
-        personKey: key,
-        type: 'DAILY_AMOUNT_CHANGE',
-        severity: 'alert',
-        label: '日払い額変更（要確認）',
-        before: formatYen(prevDaily),
-        after: formatYen(currDaily),
-        details: `日払い額が変更されました`,
-        isManualApproved: false
-      });
-    }
-
-    // 口座情報チェック
+    // ── 振込先情報チェック（bank全体） ──
     const currBank = c.bank || {};
     const prevBank = prev.bank || {};
     const bankFields = [
-      { key: 'bankName', label: '銀行名' },
-      { key: 'branchName', label: '支店名' },
-      { key: 'accountType', label: '口座種別' },
-      { key: 'accountNumber', label: '口座番号' },
+      { key: 'bankName',          label: '銀行名' },
+      { key: 'branchName',        label: '支店名' },
+      { key: 'accountType',       label: '口座種別' },
+      { key: 'accountNumber',     label: '口座番号' },
       { key: 'accountHolderKana', label: '名義カナ' }
     ];
-
     const bankChanges = [];
     for (const f of bankFields) {
-      const curr = normText(String(currBank[f.key] ?? ''));
+      const curr2 = normText(String(currBank[f.key] ?? ''));
       const prev2 = normText(String(prevBank[f.key] ?? ''));
-      if (curr !== prev2) {
+      if (curr2 !== prev2) {
         bankChanges.push({
           field: f.label,
           before: maskAccountNumber(f.key, prev2),
-          after: maskAccountNumber(f.key, curr)
+          after:  maskAccountNumber(f.key, curr2)
         });
       }
     }
-
     if (bankChanges.length > 0) {
       results.push({
         name: c.name,
         personKey: key,
         type: 'BANK_CHANGE',
         severity: 'alert',
-        label: '口座情報変更（要確認）',
+        label: '振込先変更（要確認）',
         before: bankChanges.map(b => `${b.field}: ${b.before}`).join(' / '),
-        after: bankChanges.map(b => `${b.field}: ${b.after}`).join(' / '),
+        after:  bankChanges.map(b => `${b.field}: ${b.after}`).join(' / '),
         details: `変更項目: ${bankChanges.map(b => b.field).join(', ')}`,
         isManualApproved: false
       });
     }
   }
 
-  // 先月いたが今月いない委託者
+  // 先月いたが今月いない人
   for (const p of prevContractors) {
-    const key = getSurname(normalizePersonName(p.name));
+    const key = resolvePersonKey(p.name, prevMap);
     if (!currMap[key]) {
       results.push({
         name: p.name,
         personKey: key,
         type: 'REMOVED',
         severity: 'info',
-        label: '委託者から削除',
-        before: null,
+        label: '削除',
+        before: p.role || null,
         after: null,
-        details: '先月は業務委託として登録されていましたが、今月はいません',
+        details: '先月は登録されていましたが、今月はいません',
         isManualApproved: false
       });
     }
   }
 
-  // 変更なし
-  const alertKeys = new Set(results.filter(r => r.severity === 'alert').map(r => r.personKey));
+  // 変更なしを付与
+  const changedKeys = new Set(results.map(r => r.personKey));
   for (const c of currentContractors) {
-    const key = getSurname(normalizePersonName(c.name));
-    const prev = prevMap[key];
-    if (prev && !alertKeys.has(key) && !results.some(r => r.personKey === key && r.type === 'NEW')) {
+    const key = resolvePersonKey(c.name, currMap);
+    if (prevMap[key] && !changedKeys.has(key)) {
       results.push({
         name: c.name,
         personKey: key,
@@ -206,6 +175,27 @@ function checkDiff(currentContractors, prevContractors) {
   });
 
   return results;
+}
+
+/**
+ * 人名→キーのマップを作成（同姓がいる場合は名前の一部まで含む）
+ * getSurname() / normalizePersonName() の既存ロジックを活用
+ */
+function buildPersonMap(people) {
+  const map = {};
+  for (const p of people) {
+    const key = getSurname(normalizePersonName(p.name));
+    map[key] = p;
+  }
+  return map;
+}
+
+/**
+ * 人物のキーを解決する
+ * 同姓が複数いる可能性を考慮し、苗字キーを返す
+ */
+function resolvePersonKey(name, personMap) {
+  return getSurname(normalizePersonName(name));
 }
 
 /**
@@ -244,11 +234,11 @@ function checkDiffFirstTime(currentContractors) {
  * @param {Array} prevDrList     - 先月のDRスナップショット
  * @returns {Array} drDiffResults
  *
- * チェック項目:
- * - ドライバー報酬の増減
- * - 仮払精算（日払い）の増減
- * - 口座情報の変更
+ * チェック項目（仕様）:
+ * - ドライバー報酬（基本給相当）の変更
+ * - 振込先情報（bank全体）の変更
  * - 新規追加・削除
+ * 判定: 先月と違うかどうか（アラートレベル細分化なし）
  */
 function checkDRDiff(currentDrList, prevDrList) {
   const results = [];
@@ -283,89 +273,55 @@ function checkDRDiff(currentDrList, prevDrList) {
       continue;
     }
 
-    // ドライバー報酬チェック
+    // ── ドライバー報酬チェック ──
     const currReward = Number(c.driverReward ?? 0);
     const prevReward = Number(prev.driverReward ?? 0);
-    if (currReward !== prevReward && (currReward > 0 || prevReward > 0)) {
+    if (currReward !== prevReward) {
       const delta = currReward - prevReward;
       results.push({
         name: c.name,
         personKey: key,
-        type: delta > 0 ? 'REWARD_INCREASE' : 'REWARD_DECREASE',
+        type: 'REWARD_CHANGE',
         severity: 'alert',
-        label: delta > 0 ? 'ドライバー報酬増加（要確認）' : 'ドライバー報酬減少（要確認）',
+        label: 'ドライバー報酬変更（要確認）',
         before: formatYen(prevReward),
-        after: formatYen(currReward),
+        after:  formatYen(currReward),
         details: `差分: ${delta > 0 ? '+' : ''}${formatYen(delta)}`,
         isManualApproved: false
       });
     }
 
-    // 仮払精算（日払い）チェック
-    const currKari = Number(c.karibaraiYen ?? 0);
-    const prevKari = Number(prev.karibaraiYen ?? 0);
-    const currIsKari = currKari > 0;
-    const prevIsKari = prevKari > 0;
-    if (currIsKari !== prevIsKari) {
-      results.push({
-        name: c.name,
-        personKey: key,
-        type: 'KARIBARA_MODE_CHANGE',
-        severity: 'alert',
-        label: '仮払有無変更（要確認）',
-        before: prevIsKari ? `仮払あり（${formatYen(prevKari)}）` : '仮払なし',
-        after: currIsKari ? `仮払あり（${formatYen(currKari)}）` : '仮払なし',
-        details: prevIsKari ? '仮払あり → 仮払なし に変更' : '仮払なし → 仮払あり に変更',
-        isManualApproved: false
-      });
-    } else if (currKari !== prevKari && currKari > 0) {
-      const delta = currKari - prevKari;
-      results.push({
-        name: c.name,
-        personKey: key,
-        type: 'KARIBARA_AMOUNT_CHANGE',
-        severity: 'alert',
-        label: '仮払額変更（要確認）',
-        before: formatYen(prevKari),
-        after: formatYen(currKari),
-        details: `差分: ${delta > 0 ? '+' : ''}${formatYen(delta)}`,
-        isManualApproved: false
-      });
-    }
-
-    // 口座情報チェック
+    // ── 振込先情報チェック ──
     const currBank = c.bank || {};
     const prevBank = prev.bank || {};
     const bankFields = [
-      { key: 'bankName', label: '銀行名' },
-      { key: 'branchName', label: '支店名' },
-      { key: 'accountType', label: '口座種別' },
-      { key: 'accountNumber', label: '口座番号' },
+      { key: 'bankName',          label: '銀行名' },
+      { key: 'branchName',        label: '支店名' },
+      { key: 'accountType',       label: '口座種別' },
+      { key: 'accountNumber',     label: '口座番号' },
       { key: 'accountHolderKana', label: '名義カナ' }
     ];
-
     const bankChanges = [];
     for (const f of bankFields) {
-      const curr = normText(String(currBank[f.key] ?? ''));
+      const curr2 = normText(String(currBank[f.key] ?? ''));
       const prev2 = normText(String(prevBank[f.key] ?? ''));
-      if (curr !== prev2) {
+      if (curr2 !== prev2) {
         bankChanges.push({
           field: f.label,
           before: maskAccountNumber(f.key, prev2),
-          after: maskAccountNumber(f.key, curr)
+          after:  maskAccountNumber(f.key, curr2)
         });
       }
     }
-
     if (bankChanges.length > 0) {
       results.push({
         name: c.name,
         personKey: key,
         type: 'BANK_CHANGE',
         severity: 'alert',
-        label: '口座情報変更（要確認）',
+        label: '振込先変更（要確認）',
         before: bankChanges.map(b => `${b.field}: ${b.before}`).join(' / '),
-        after: bankChanges.map(b => `${b.field}: ${b.after}`).join(' / '),
+        after:  bankChanges.map(b => `${b.field}: ${b.after}`).join(' / '),
         details: `変更項目: ${bankChanges.map(b => b.field).join(', ')}`,
         isManualApproved: false
       });
@@ -391,11 +347,10 @@ function checkDRDiff(currentDrList, prevDrList) {
   }
 
   // 変更なし
-  const alertKeys = new Set(results.filter(r => r.severity === 'alert').map(r => r.personKey));
+  const changedKeys = new Set(results.map(r => r.personKey));
   for (const c of currentDrList) {
     const key = getDRKey(c.name);
-    const prev = prevMap[key];
-    if (prev && !alertKeys.has(key) && !results.some(r => r.personKey === key && r.type === 'NEW')) {
+    if (prevMap[key] && !changedKeys.has(key)) {
       results.push({
         name: c.name,
         personKey: key,

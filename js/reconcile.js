@@ -232,6 +232,15 @@ function reconcileDR(drList, dailyPayEntries) {
     const drFullKey = normalizePersonName(dr.name);
     const karibaraiYen = dr.karibaraiYen ?? 0;
 
+    // 適格請求支払手数料チェック: driverReward × 2%（端数 ±1円許容）
+    const feeExpected = Math.round((dr.driverReward ?? 0) * 0.02);
+    const feeActual   = dr.actualFee ?? 0;
+    const feeCheck    = {
+      expected: feeExpected,
+      actual:   feeActual,
+      ok:       Math.abs(feeActual - feeExpected) <= 1
+    };
+
     // 月計表で対応するエントリを探す
     const monthlyEntries = findMonthlyEntries(monthlyMap, drKey, drFullKey);
     const matched = monthlyEntries.filter(e => e.dailyPayYen > 0);
@@ -244,6 +253,7 @@ function reconcileDR(drList, dailyPayEntries) {
           drKaribaraiYen: karibaraiYen,
           monthlyDailyPayYen: 0, monthlyRawLabel: '',
           driverReward: dr.driverReward,
+          feeCheck,
           status: 'NG',
           reason: `月計表に「DR${drKey} 日払い」行がありません（漏れ）`,
           isManualApproved: false
@@ -258,6 +268,7 @@ function reconcileDR(drList, dailyPayEntries) {
             monthlyDailyPayYen: totalMonthly,
             monthlyRawLabel: firstMatch.personRawLabel,
             driverReward: dr.driverReward,
+            feeCheck,
             status: 'OK', reason: '一致',
             isManualApproved: false
           });
@@ -268,6 +279,7 @@ function reconcileDR(drList, dailyPayEntries) {
             monthlyDailyPayYen: totalMonthly,
             monthlyRawLabel: firstMatch.personRawLabel,
             driverReward: dr.driverReward,
+            feeCheck,
             status: 'NG',
             reason: `金額不一致（DRファイル仮払: ${formatYen(karibaraiYen)}、月計表: ${formatYen(totalMonthly)}）`,
             isManualApproved: false
@@ -283,6 +295,7 @@ function reconcileDR(drList, dailyPayEntries) {
           monthlyDailyPayYen: totalMonthly,
           monthlyRawLabel: matched[0].personRawLabel,
           driverReward: dr.driverReward,
+          feeCheck,
           status: 'NG',
           reason: `DRファイルの仮払は0ですが、月計表に${formatYen(totalMonthly)}の日払いがあります`,
           isManualApproved: false
@@ -293,6 +306,7 @@ function reconcileDR(drList, dailyPayEntries) {
           drKaribaraiYen: 0,
           monthlyDailyPayYen: 0, monthlyRawLabel: '',
           driverReward: dr.driverReward,
+          feeCheck,
           status: 'OK', reason: '日払いなし（両方0）',
           isManualApproved: false
         });
@@ -312,6 +326,7 @@ function reconcileDR(drList, dailyPayEntries) {
         monthlyDailyPayYen: entry.dailyPayYen,
         monthlyRawLabel: entry.personRawLabel,
         driverReward: null,
+        feeCheck: null,
         status: 'NG',
         reason: `月計表に日払いがありますが、DRファイルに「${entry.personKey}」のタブがありません`,
         isManualApproved: false

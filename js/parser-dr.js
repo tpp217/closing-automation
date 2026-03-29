@@ -106,6 +106,7 @@ function parseDRPersonalSheet(ws, sheetName) {
   // ★ 明細行を走査（R18〜R28: index 17〜27）
   let driverReward = 0;
   let karibaraiYen = 0;  // 仮払精算の絶対値 = 日払い額
+  let actualFee    = 0;  // 適格請求支払手数料の実額
   let totalAmount  = 0;
 
   for (let r = DR_ROW_DETAIL_HDR + 1; r <= Math.min(range.e.r, 35); r++) {
@@ -118,6 +119,8 @@ function parseDRPersonalSheet(ws, sheetName) {
     } else if (descRaw.includes('仮払精算') || descRaw.includes('仮払い精算')) {
       // 仮払精算はマイナスで記載 → 絶対値が日払い額
       karibaraiYen = Math.round(Math.abs(amt));
+    } else if (descRaw.includes('適格請求支払手数料')) {
+      actualFee = Math.round(Math.abs(amt));
     } else if (descRaw.includes('合') && descRaw.replace(/\s/g,'').includes('計')) {
       totalAmount = Math.round(Math.abs(amt));
     }
@@ -143,6 +146,7 @@ function parseDRPersonalSheet(ws, sheetName) {
     sheetName,
     driverReward,
     karibaraiYen,   // ← これが月計表の「DR○○ 日払い」と照合する値
+    actualFee,      // 適格請求支払手数料の実額
     totalAmount,
     bank,
     warnings
