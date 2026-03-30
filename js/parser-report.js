@@ -512,23 +512,32 @@ function extractCompanyAndDate(ws) {
         companyName = s;
       }
 
-      // 日付: セルが日付型
+      // 日付: セルが日付型 または Excelシリアル値（t=n で 40000以上）または文字列
       const cell = ws[XLSX.utils.encode_cell({ r, c })];
       if (!invoiceDate && cell) {
         if (cell.t === 'd') {
           const d = new Date(cell.v);
           invoiceDate = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
-        } else if (typeof s === 'string') {
-          // 「2024年12月」「2024/12/31」「12/31/24」「R6.12.31」など
+        } else if (cell.t === 'n' && cell.v > 40000 && cell.w) {
+          // Excelシリアル値（表示値 w が日付形式）
+          // w例: "12/31/24" → MM/DD/YY
+          const w = String(cell.w).trim();
           let m;
-          if ((m = s.match(/(\d{4})[年\/\-](\d{1,2})/))) {
-            invoiceDate = `${m[1]}/${m[2].padStart(2,'0')}`;
-          } else if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/))) {
-            // MM/DD/YY or MM/DD/YYYY
+          if ((m = w.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/))) {
             const yr = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
             invoiceDate = `${yr}/${m[1].padStart(2,'0')}/${m[2].padStart(2,'0')}`;
-          } else if ((m = s.match(/R(\d+)[\.\-\/](\d{1,2})/))) {
-            // 令和
+          } else if ((m = w.match(/(\d{4})[\/\-](\d{1,2})/))) {
+            invoiceDate = `${m[1]}/${m[2].padStart(2,'0')}`;
+          }
+        } else if (cell.t === 's') {
+          const s2 = String(cell.v).trim();
+          let m;
+          if ((m = s2.match(/(\d{4})[年\/\-](\d{1,2})/))) {
+            invoiceDate = `${m[1]}/${m[2].padStart(2,'0')}`;
+          } else if ((m = s2.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/))) {
+            const yr = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+            invoiceDate = `${yr}/${m[1].padStart(2,'0')}/${m[2].padStart(2,'0')}`;
+          } else if ((m = s2.match(/R(\d+)[\.\-\/](\d{1,2})/))) {
             invoiceDate = `令和${m[1]}年${m[2]}月`;
           }
         }
