@@ -169,7 +169,7 @@ async function runStep2() {
     console.log('[Step2] 全員:', JSON.stringify(allPeople.map(c => ({
       name: c.name, role: c.role,
       basicPayMan: c.basicPayMan, dailyPayYen: c.dailyPayYen,
-      companyName: c.companyName, invoiceDate: c.invoiceDate
+      companyName: c.companyName, representativeName: c.representativeName
     })), null, 2));
     if (warnings.length) console.warn('[Step2] 警告:', warnings);
 
@@ -1533,9 +1533,9 @@ function renderSnapDiffTab(currentRows, prevRows, prevYm, currentDrRows, prevDrR
       diffs.push({ name: r.person_name, label: '会社名変更', before: prev.company_name || '（空）', after: r.company_name || '（空）', severity: 'alert' });
       hasChange = true;
     }
-    // 日付
-    if ((r.invoice_date || '') !== (prev.invoice_date || '')) {
-      diffs.push({ name: r.person_name, label: '日付変更', before: prev.invoice_date || '（空）', after: r.invoice_date || '（空）', severity: 'alert' });
+    // 代表者名（日付は毎月変わるため対象外）
+    if ((r.representative_name || '') !== (prev.representative_name || '')) {
+      diffs.push({ name: r.person_name, label: '代表者名変更', before: prev.representative_name || '（空）', after: r.representative_name || '（空）', severity: 'alert' });
       hasChange = true;
     }
 
