@@ -153,15 +153,12 @@
         <div class="snapshot-panel" id="snapshot-panel">
           <div class="snapshot-panel-header">
             <span><i class="fas fa-database"></i> SAVED SNAPSHOTS</span>
-            <span id="snapshot-status" class="snapshot-status"></span>
+            <button id="btn-bulk-import" class="btn btn-outline" style="font-size:0.72rem;padding:0.2rem 0.6rem;">
+              <i class="fas fa-folder-open"></i> 一括インポート
+            </button>
           </div>
           <div id="snapshot-list" class="snapshot-list">
             <div class="snapshot-empty"><i class="fas fa-spinner fa-spin"></i> 読み込み中...</div>
-          </div>
-          <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--border)">
-            <button id="btn-bulk-import" class="btn btn-outline" style="width:100%;font-size:0.78rem;">
-              <i class="fas fa-folder-open"></i> 過去ファイル一括インポート
-            </button>
           </div>
         </div>
 
