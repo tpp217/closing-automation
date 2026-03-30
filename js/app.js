@@ -1716,20 +1716,30 @@ function resetBulkModal() {
 }
 
 function handleBulkFiles(files) {
-  // ファイルを種別・店舗・年月でグループ化
-  const map = {}; // key: "storeName__periodYm"
+  const map = {};
+  let ignoredCount = 0;
 
   for (const f of files) {
     const name = f.name;
+    // xlsx/xls以外は無視
+    if (!/\.(xlsx|xls)$/i.test(name)) continue;
+
     const { storeName, periodYm } = parseFileNameInfo(name);
-    if (!storeName || !periodYm) continue;
+    // 店舗名・年月が取れないファイルは無視
+    if (!storeName || !periodYm) { ignoredCount++; continue; }
+
+    // 種別判定
+    const isReport  = /業務報告書/.test(name);
+    const isMonthly = /月計表|内勤請求/.test(name);
+    const isDR      = /DR/.test(name);
+    // どの種別にも該当しない場合は無視
+    if (!isReport && !isMonthly && !isDR) { ignoredCount++; continue; }
 
     const key = `${storeName}__${periodYm}`;
     if (!map[key]) map[key] = { storeName, periodYm, report: null, monthly: null, dr: null };
-
-    if (/業務報告書/.test(name))           map[key].report  = f;
-    else if (/月計表|内勤請求/.test(name)) map[key].monthly = f;
-    else if (/DR/.test(name))              map[key].dr      = f;
+    if (isReport)  map[key].report  = f;
+    if (isMonthly) map[key].monthly = f;
+    if (isDR)      map[key].dr      = f;
   }
 
   // 古い月から順にソート
@@ -1773,6 +1783,10 @@ function handleBulkFiles(files) {
     $('btn-bulk-run').disabled = runnable === 0;
     $('btn-bulk-run').innerHTML = `<i class="fas fa-play"></i> 処理実行（${runnable}件${skipped > 0 ? `・${skipped}件スキップ` : ''}）`;
   }
+
+  // 無視ファイル数を表示
+  const ignoredEl = $('bulk-ignored-count');
+  if (ignoredEl) ignoredEl.textContent = ignoredCount > 0 ? `※ 認識できなかったファイル ${ignoredCount}件は無視しました` : '';
 
   $('bulk-file-list').style.display = 'block';
   $('bulk-actions').style.display   = 'flex';

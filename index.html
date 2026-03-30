@@ -343,16 +343,17 @@
 
         <!-- ドロップゾーン -->
         <div id="bulk-drop-zone" style="border:2px dashed var(--border);border-radius:8px;padding:2rem;text-align:center;cursor:pointer;margin-bottom:1rem;transition:border-color .2s">
-          <input type="file" id="bulk-file-input" multiple accept=".xlsx,.xls" style="display:none">
+          <input type="file" id="bulk-file-input" multiple webkitdirectory accept=".xlsx,.xls" style="display:none">
           <i class="fas fa-folder-open" style="font-size:2rem;color:var(--text-muted);margin-bottom:0.5rem;display:block"></i>
-          <div style="font-family:var(--font-mono);font-size:0.8rem;color:var(--text-muted)">クリックしてファイルを選択（複数可）</div>
-          <div style="font-size:0.72rem;color:var(--gray-400);margin-top:0.25rem">業務報告書・月計表・DRファイルをまとめて選択してください</div>
+          <div style="font-family:var(--font-mono);font-size:0.8rem;color:var(--text-muted)">クリックしてフォルダを選択</div>
+          <div style="font-size:0.72rem;color:var(--gray-400);margin-top:0.25rem">サブフォルダも含めて自動スキャンします。関係ないファイルは無視されます。</div>
         </div>
 
         <!-- 分類結果リスト -->
         <div id="bulk-file-list" style="display:none;margin-bottom:1rem">
           <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted);margin-bottom:0.5rem">▸ 検出されたファイルセット</div>
           <div id="bulk-file-table"></div>
+          <div id="bulk-ignored-count" style="font-size:0.72rem;color:var(--gray-400);margin-top:0.4rem;padding-left:0.25rem"></div>
         </div>
 
         <!-- 実行ボタン -->
