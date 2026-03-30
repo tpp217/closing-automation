@@ -73,8 +73,8 @@ async function parseReport(buffer) {
     const bankResult = extractBankFromPersonSheet(wb, person.name);
     person.bank          = bankResult.bank;
     person.sheetName     = bankResult.sheetName || null;
-    person.companyName   = bankResult.companyName  ?? null;
-    person.invoiceDate   = bankResult.invoiceDate  ?? null;
+    person.companyName        = bankResult.companyName        ?? null;
+    person.representativeName = bankResult.representativeName ?? null;
     person.officeRentYen = bankResult.officeRentYen ?? 0;
     person.otherItems    = bankResult.otherItems  ?? [];
     if (bankResult.warnings.length) {
@@ -287,8 +287,8 @@ function extractBankFromPersonSheet(wb, personName) {
   // ── 個人タブの明細から事務所レンタル料・その他を取得 ──
   const { officeRentYen, otherItems } = extractDetailItems(ws);
 
-  const { companyName, invoiceDate } = extractCompanyAndDate(ws);
-  return { bank, sheetName, officeRentYen, otherItems, companyName, invoiceDate, warnings };
+  const { companyName, representativeName } = extractCompanyAndDate(ws);
+  return { bank, sheetName, officeRentYen, otherItems, companyName, representativeName, warnings };
 }
 
 // C12検索用除外パターン（丸数字シートは除外しない＝C12で氏名を持つ個人タブを検索対象にする）
@@ -495,35 +495,32 @@ function extractDetailItems(ws) {
  * 日付は「年」を含む数値セルまたは日付セルを探す
  */
 function extractCompanyAndDate(ws) {
-  if (!ws || !ws['!ref']) return { companyName: null, invoiceDate: null };
+  if (!ws || !ws['!ref']) return { companyName: null, representativeName: null };
   const range = XLSX.utils.decode_range(ws['!ref']);
   const endRow = Math.min(30, range.e.r);
   let companyName = null;
-  let invoiceDate = null;
+  let representativeName = null;
 
   for (let r = 0; r <= endRow; r++) {
     for (let c = 0; c <= range.e.c; c++) {
       const v = getCellValue(ws, r, c);
       if (!v) continue;
       const s = String(v).trim();
-      // 会社名: 株式会社・有限会社・合同会社・合名会社・合資会社 を含む
+
+      // 会社名: 株式会社・有限会社・合同会社 等を含む
       if (!companyName && /株式会社|有限会社|合同会社|合名会社|合資会社/.test(s)) {
         companyName = s;
       }
-      // 日付: セルが日付型 または 「年」を含む文字列
-      if (!invoiceDate) {
-        const cell = ws[XLSX.utils.encode_cell({ r, c })];
-        if (cell && cell.t === 'd') {
-          const d = new Date(cell.v);
-          invoiceDate = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
-        } else if (typeof s === 'string' && /\d{4}年\d{1,2}月/.test(s)) {
-          invoiceDate = s;
-        }
+
+      // 代表者名: 「代表取締役」「取締役」「代表」などを含むセル
+      if (!representativeName && /代表取締役|取締役|代表社員|代表/.test(s)) {
+        // 「様」を除去してトリム
+        representativeName = s.replace(/\s*様\s*$/, '').trim();
       }
     }
-    if (companyName && invoiceDate) break;
+    if (companyName && representativeName) break;
   }
-  return { companyName, invoiceDate };
+  return { companyName, representativeName };
 }
 
 /** 行の指定列以降を走査して最初に見つかった数値を返す */

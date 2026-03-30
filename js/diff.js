@@ -146,21 +146,22 @@ function checkDiff(currentContractors, prevContractors) {
       });
     }
 
-    // ── 日付（明細書）チェック ──
-    const currDate = normText(String(c.invoiceDate ?? ''));
-    const prevDate = normText(String(prev.invoiceDate ?? ''));
-    if (currDate !== prevDate) {
+    // ── 代表者名（明細書）チェック ──
+    const currRep = normText(String(c.representativeName ?? ''));
+    const prevRep = normText(String(prev.representativeName ?? ''));
+    if (currRep !== prevRep && (currRep || prevRep)) {
       results.push({
         name: c.name, personKey: key,
-        type: 'DATE_CHANGE',
+        type: 'REP_CHANGE',
         severity: 'alert',
-        label: '日付変更（要確認）',
-        before: prevDate || '（空）',
-        after:  currDate || '（空）',
-        details: '明細書の日付が変更されました',
+        label: '代表者名変更（要確認）',
+        before: prevRep || '（空）',
+        after:  currRep || '（空）',
+        details: '明細書の代表者名が変更されました',
         isManualApproved: false
       });
     }
+    // ※ 日付は毎月変わるため差分チェック対象外
   }
 
   // 先月いたが今月いない人
@@ -337,6 +338,38 @@ function checkDRDiff(currentDrList, prevDrList) {
         before: bankChanges.map(b => `${b.field}: ${b.before}`).join(' / '),
         after:  bankChanges.map(b => `${b.field}: ${b.after}`).join(' / '),
         details: `変更項目: ${bankChanges.map(b => b.field).join(', ')}`,
+        isManualApproved: false
+      });
+    }
+
+    // ── 会社名チェック ──
+    const currCompanyDR = normText(String(c.companyName ?? ''));
+    const prevCompanyDR = normText(String(prev.companyName ?? ''));
+    if (currCompanyDR !== prevCompanyDR && (currCompanyDR || prevCompanyDR)) {
+      results.push({
+        name: c.name, personKey: key,
+        type: 'COMPANY_CHANGE',
+        severity: 'alert',
+        label: '会社名変更（要確認）',
+        before: prevCompanyDR || '（空）',
+        after:  currCompanyDR || '（空）',
+        details: '明細書の会社名が変更されました',
+        isManualApproved: false
+      });
+    }
+
+    // ── 代表者名チェック ──
+    const currRepDR = normText(String(c.representativeName ?? ''));
+    const prevRepDR = normText(String(prev.representativeName ?? ''));
+    if (currRepDR !== prevRepDR && (currRepDR || prevRepDR)) {
+      results.push({
+        name: c.name, personKey: key,
+        type: 'REP_CHANGE',
+        severity: 'alert',
+        label: '代表者名変更（要確認）',
+        before: prevRepDR || '（空）',
+        after:  currRepDR || '（空）',
+        details: '明細書の代表者名が変更されました',
         isManualApproved: false
       });
     }

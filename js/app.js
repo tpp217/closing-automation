@@ -168,7 +168,8 @@ async function runStep2() {
     // デバッグ用ログ（開発者ツールで確認可能）
     console.log('[Step2] 全員:', JSON.stringify(allPeople.map(c => ({
       name: c.name, role: c.role,
-      basicPayMan: c.basicPayMan, dailyPayYen: c.dailyPayYen
+      basicPayMan: c.basicPayMan, dailyPayYen: c.dailyPayYen,
+      companyName: c.companyName, representativeName: c.representativeName
     })), null, 2));
     if (warnings.length) console.warn('[Step2] 警告:', warnings);
 
@@ -1532,9 +1533,9 @@ function renderSnapDiffTab(currentRows, prevRows, prevYm, currentDrRows, prevDrR
       diffs.push({ name: r.person_name, label: '会社名変更', before: prev.company_name || '（空）', after: r.company_name || '（空）', severity: 'alert' });
       hasChange = true;
     }
-    // 日付
-    if ((r.invoice_date || '') !== (prev.invoice_date || '')) {
-      diffs.push({ name: r.person_name, label: '日付変更', before: prev.invoice_date || '（空）', after: r.invoice_date || '（空）', severity: 'alert' });
+    // 代表者名（日付は毎月変わるため対象外）
+    if ((r.representative_name || '') !== (prev.representative_name || '')) {
+      diffs.push({ name: r.person_name, label: '代表者名変更', before: prev.representative_name || '（空）', after: r.representative_name || '（空）', severity: 'alert' });
       hasChange = true;
     }
 
@@ -1603,6 +1604,18 @@ function renderSnapDiffTab(currentRows, prevRows, prevYm, currentDrRows, prevDrR
           drDiffs.push({ name: r.person_name, label: `振込先変更（${f.label}）`, before: db, after: da, severity: 'alert' });
           hasChange = true;
         }
+      }
+      // 会社名
+      const cComp = String(r.company_name ?? ''), pComp = String(prev.company_name ?? '');
+      if (cComp !== pComp && (cComp || pComp)) {
+        drDiffs.push({ name: r.person_name, label: '会社名変更', before: pComp || '（空）', after: cComp || '（空）', severity: 'alert' });
+        hasChange = true;
+      }
+      // 代表者名
+      const cRep = String(r.representative_name ?? ''), pRep = String(prev.representative_name ?? '');
+      if (cRep !== pRep && (cRep || pRep)) {
+        drDiffs.push({ name: r.person_name, label: '代表者名変更', before: pRep || '（空）', after: cRep || '（空）', severity: 'alert' });
+        hasChange = true;
       }
       if (!hasChange) drDiffs.push({ name: r.person_name, label: '変更なし', before: '-', after: '-', severity: 'ok' });
     }
