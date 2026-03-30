@@ -341,6 +341,38 @@ function checkDRDiff(currentDrList, prevDrList) {
         isManualApproved: false
       });
     }
+
+    // ── 会社名チェック ──
+    const currCompanyDR = normText(String(c.companyName ?? ''));
+    const prevCompanyDR = normText(String(prev.companyName ?? ''));
+    if (currCompanyDR !== prevCompanyDR && (currCompanyDR || prevCompanyDR)) {
+      results.push({
+        name: c.name, personKey: key,
+        type: 'COMPANY_CHANGE',
+        severity: 'alert',
+        label: '会社名変更（要確認）',
+        before: prevCompanyDR || '（空）',
+        after:  currCompanyDR || '（空）',
+        details: '明細書の会社名が変更されました',
+        isManualApproved: false
+      });
+    }
+
+    // ── 代表者名チェック ──
+    const currRepDR = normText(String(c.representativeName ?? ''));
+    const prevRepDR = normText(String(prev.representativeName ?? ''));
+    if (currRepDR !== prevRepDR && (currRepDR || prevRepDR)) {
+      results.push({
+        name: c.name, personKey: key,
+        type: 'REP_CHANGE',
+        severity: 'alert',
+        label: '代表者名変更（要確認）',
+        before: prevRepDR || '（空）',
+        after:  currRepDR || '（空）',
+        details: '明細書の代表者名が変更されました',
+        isManualApproved: false
+      });
+    }
   }
 
   // 先月いたが今月いないDR

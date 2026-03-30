@@ -1605,6 +1605,18 @@ function renderSnapDiffTab(currentRows, prevRows, prevYm, currentDrRows, prevDrR
           hasChange = true;
         }
       }
+      // 会社名
+      const cComp = String(r.company_name ?? ''), pComp = String(prev.company_name ?? '');
+      if (cComp !== pComp && (cComp || pComp)) {
+        drDiffs.push({ name: r.person_name, label: '会社名変更', before: pComp || '（空）', after: cComp || '（空）', severity: 'alert' });
+        hasChange = true;
+      }
+      // 代表者名
+      const cRep = String(r.representative_name ?? ''), pRep = String(prev.representative_name ?? '');
+      if (cRep !== pRep && (cRep || pRep)) {
+        drDiffs.push({ name: r.person_name, label: '代表者名変更', before: pRep || '（空）', after: cRep || '（空）', severity: 'alert' });
+        hasChange = true;
+      }
       if (!hasChange) drDiffs.push({ name: r.person_name, label: '変更なし', before: '-', after: '-', severity: 'ok' });
     }
     (prevDrRows || []).forEach(r => {

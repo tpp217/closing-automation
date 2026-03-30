@@ -135,6 +135,22 @@ function parseDRPersonalSheet(ws, sheetName) {
   // ★ 口座情報: R38〜R41（index 37〜40）
   const bank = extractDRBankBlock(ws);
 
+  // ★ 会社名・代表者名（業務報告書と同じロジック）
+  const range2 = XLSX.utils.decode_range(ws['!ref']);
+  const endRow2 = Math.min(30, range2.e.r);
+  let companyName = null, representativeName = null;
+  for (let r2 = 0; r2 <= endRow2; r2++) {
+    for (let c2 = 0; c2 <= range2.e.c; c2++) {
+      const v2 = getCellValue(ws, r2, c2);
+      if (!v2) continue;
+      const s2 = String(v2).trim();
+      if (!companyName && /株式会社|有限会社|合同会社|合名会社|合資会社|Plus/.test(s2)) companyName = s2;
+      if (!representativeName && /代表取締役|取締役|代表社員|代表/.test(s2))
+        representativeName = s2.replace(/\s*様\s*$/, '').trim();
+    }
+    if (companyName && representativeName) break;
+  }
+
   // 氏名の検証
   if (!nameRaw) {
     warnings.push({ level: 'warn', message: `シート「${sheetName}」に氏名が見つかりません`, code: 'NAME_NOT_FOUND' });
@@ -145,10 +161,12 @@ function parseDRPersonalSheet(ws, sheetName) {
     name: nameRaw,
     sheetName,
     driverReward,
-    karibaraiYen,   // ← これが月計表の「DR○○ 日払い」と照合する値
-    actualFee,      // 適格請求支払手数料の実額
+    karibaraiYen,
+    actualFee,
     totalAmount,
     bank,
+    companyName,
+    representativeName,
     warnings
   };
 }

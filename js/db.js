@@ -251,6 +251,8 @@ async function saveDRSnapshot(drList, storeName, periodYm, reconcileResults) {
       reconcile_status:     rec?.status      ?? 'NONE',
       reconcile_reason:     rec?.reason      ?? '',
       reconcile_monthly_yen: rec?.monthlyDailyPayYen ?? 0,
+      company_name:          dr.companyName          ?? '',
+      representative_name:   dr.representativeName   ?? '',
       bank_name:            dr.bank?.bankName           ?? '',
       branch_name:          dr.bank?.branchName         ?? '',
       account_type:         dr.bank?.accountType        ?? '',
@@ -279,6 +281,8 @@ async function getDRSnapshot(storeName, periodYm) {
       reconcileStatus:     r.reconcile_status      ?? 'NONE',
       reconcileReason:     r.reconcile_reason      ?? '',
       reconcileMonthlyYen: Number(r.reconcile_monthly_yen ?? 0),
+      companyName:         r.company_name          ?? '',
+      representativeName:  r.representative_name   ?? '',
       bank: {
         bankName:          r.bank_name           ?? '',
         branchName:        r.branch_name         ?? '',
