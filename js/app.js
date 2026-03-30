@@ -1753,7 +1753,7 @@ function handleBulkFiles(files) {
         <td style="padding:4px 8px">${rOk}</td>
         <td style="padding:4px 8px">${mOk}</td>
         <td style="padding:4px 8px">${dOk}</td>
-        <td style="padding:4px 8px">${canRun ? '<span class="badge badge-ok">処理可</span>' : '<span class="badge badge-ng">業務報告書または月計表がありません</span>'}</td>
+        <td style="padding:4px 8px">${canRun ? '<span class="badge badge-ok">処理可</span>' : '<span class="badge badge-warn"><i class="fas fa-forward"></i> スキップ（業務報告書または月計表なし）</span>'}</td>
       </tr>`;
     }).join('');
     tableEl.innerHTML = `
@@ -1769,8 +1769,9 @@ function handleBulkFiles(files) {
         <tbody>${rows}</tbody>
       </table>`;
     const runnable = sets.filter(s => s.report && s.monthly).length;
+    const skipped  = sets.filter(s => !s.report || !s.monthly).length;
     $('btn-bulk-run').disabled = runnable === 0;
-    $('btn-bulk-run').textContent = `処理実行（${runnable}件）`;
+    $('btn-bulk-run').innerHTML = `<i class="fas fa-play"></i> 処理実行（${runnable}件${skipped > 0 ? `・${skipped}件スキップ` : ''}）`;
   }
 
   $('bulk-file-list').style.display = 'block';
