@@ -131,9 +131,7 @@ function showFileInfo(elementId, name, size) {
         <div class="file-name"><i class="fas fa-file-excel"></i> ${name}</div>
         <div style="font-size:0.8rem;color:var(--gray-400);margin-top:2px">${(size / 1024).toFixed(1)} KB</div>
       </div>
-      <button onclick="clearFile('${fileKey}')" title="削除" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:1.1rem;padding:0.2rem 0.4rem" aria-label="ファイルを削除">
-        <i class="fas fa-times-circle"></i>
-      </button>
+      <button onclick="clearFile('${fileKey}')" title="削除" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:0.72rem;padding:0;text-decoration:underline;text-underline-offset:2px;opacity:0.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'" aria-label="ファイルを削除">削除</button>
     </div>`;
   show(el);
 }
