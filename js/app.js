@@ -1862,8 +1862,10 @@ function renderBulkTable(sets, ignoredCount) {
       const key = `${s.storeName}__${s.periodYm}`;
       const statusCell = canRun
         ? '<span class="badge badge-ok">処理可</span>'
-        : `<span class="badge badge-warn"><i class="fas fa-forward"></i> スキップ</span>
-           <button onclick="deleteBulkStore('${escapeHtml(key)}')" title="この店舗を削除" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:1rem;padding:0 0.3rem;vertical-align:middle" aria-label="削除"><i class="fas fa-times-circle"></i></button>`;
+        : `<span style="display:inline-flex;align-items:center;gap:0.4rem">
+             <span class="badge badge-warn"><i class="fas fa-forward"></i> スキップ</span>
+             <button onclick="deleteBulkStore('${escapeHtml(key)}')" title="この店舗を削除" class="btn btn-danger btn-sm" style="padding:0.15rem 0.5rem;font-size:0.7rem" aria-label="削除"><i class="fas fa-times"></i></button>
+           </span>`;
       return `<tr data-bulk-key="${escapeHtml(key)}" style="${canRun ? '' : 'opacity:.5'}">
         <td style="padding:4px 8px;font-weight:700">${escapeHtml(s.storeName)}</td>
         <td style="padding:4px 8px">${s.periodYm.replace('-','年').replace(/(\d{2})$/,m=>parseInt(m)+'月')}</td>
