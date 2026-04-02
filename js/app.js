@@ -2098,25 +2098,41 @@ async function runOrganizerProcess() {
     barEl.style.width = `${Math.round((done / total) * 80)}%`;
 
     if (ext === 'zip') {
-      log(`📦 ZIP展開中: ${escapeHtml(file.name)}`);
+      // ZIPと同名フォルダを作り、中身を全コピー＋仕分けフォルダにもコピー
+      const zipBaseName = file.name.replace(/\.zip$/i, '');
+      log(`📦 ZIP展開中: ${escapeHtml(file.name)} → ${escapeHtml(zipBaseName)}/`);
       try {
         const zip = await JSZip.loadAsync(file);
         const entries = Object.entries(zip.files);
-        log(`  → ${entries.filter(([,e]) => !e.dir).length} ファイル検出`);
-        for (const [path, zipEntry] of entries) {
-          if (zipEntry.dir) continue;
-          const fname = path.split('/').pop();
-          if (!fname) continue;
-          const fext  = fname.split('.').pop().toLowerCase();
-          if (!['xls','xlsx','xlsm'].includes(fext)) continue;
+        const fileEntries = entries.filter(([, e]) => !e.dir);
+        log(`  → ${fileEntries.length} ファイル検出`);
 
-          const buf  = await zipEntry.async('arraybuffer');
-          const dest = getOrganizerDest(fname);
-          if (dest) {
-            outputFiles[`${dest}/${fname}`] = buf;
-            log(`  ✓ ${escapeHtml(fname)} → ${dest}/`);
-          } else {
-            log(`  - ${escapeHtml(fname)}（仕分けなし）`);
+        for (const [path, zipEntry] of fileEntries) {
+          // ZIPのトップレベルに余分な同名フォルダがある場合はフラット化
+          // 例: 大宮/大宮/file.xlsx → 大宮/file.xlsx
+          let relativePath = path;
+          const parts = path.split('/');
+          if (parts.length >= 2 && parts[0] === zipBaseName) {
+            relativePath = parts.slice(1).join('/');
+          }
+          const fname = relativePath.split('/').pop();
+          if (!fname) continue;
+
+          const buf = await zipEntry.async('arraybuffer');
+
+          // ① 同名フォルダに全ファイルコピー（種類問わず）
+          outputFiles[`${zipBaseName}/${relativePath}`] = buf;
+
+          // ② Excel は仕分けフォルダにもコピー
+          const fext = fname.split('.').pop().toLowerCase();
+          if (['xls','xlsx','xlsm'].includes(fext)) {
+            const dest = getOrganizerDest(fname);
+            if (dest) {
+              outputFiles[`${dest}/${fname}`] = buf;
+              log(`  ✓ ${escapeHtml(fname)} → ${escapeHtml(zipBaseName)}/ + ${dest}/`);
+            } else {
+              log(`  → ${escapeHtml(fname)} → ${escapeHtml(zipBaseName)}/（仕分けなし）`);
+            }
           }
         }
       } catch(e) {
