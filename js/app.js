@@ -1989,7 +1989,7 @@ const ORGANIZER_RULES = [
 ];
 // DR請求書フォルダは完全に空で作成（JSZipは空フォルダをサポートしないためダミーは使わない）
 // → generateAsync後に空フォルダとして追加する方法を使用
-const ORGANIZER_EMPTY_FOLDERS = ['DR請求書', '内勤請求'];
+const ORGANIZER_EMPTY_FOLDERS = ['業務報告書', '各種統計', '店舗データ', '内勤請求', '内勤請求/DR請求書'];
 
 let _organizerAllFiles = []; // フォルダ選択で取得した全Fileオブジェクト
 
