@@ -1862,9 +1862,9 @@ function renderBulkTable(sets, ignoredCount) {
       const key = `${s.storeName}__${s.periodYm}`;
       const statusCell = canRun
         ? '<span class="badge badge-ok">処理可</span>'
-        : `<span style="display:inline-flex;align-items:center;gap:0.4rem">
+        : `<span style="display:inline-flex;align-items:center;gap:0.6rem">
              <span class="badge badge-warn"><i class="fas fa-forward"></i> スキップ</span>
-             <button onclick="deleteBulkStore('${escapeHtml(key)}')" title="この店舗を削除" class="btn btn-danger btn-sm" style="padding:0.15rem 0.5rem;font-size:0.7rem" aria-label="削除"><i class="fas fa-times"></i></button>
+             <button onclick="deleteBulkStore('${escapeHtml(key)}')" title="この店舗を削除" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:0.72rem;padding:0;text-decoration:underline;text-underline-offset:2px;opacity:0.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'" aria-label="削除">削除</button>
            </span>`;
       return `<tr data-bulk-key="${escapeHtml(key)}" style="${canRun ? '' : 'opacity:.5'}">
         <td style="padding:4px 8px;font-weight:700">${escapeHtml(s.storeName)}</td>
