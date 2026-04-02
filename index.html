@@ -22,7 +22,7 @@
           <i class="fas fa-terminal"></i>
           <div>
             <div class="logo-main">[ BILLING_CHECK_SYS ]<span class="blink" style="margin-left:4px;">_</span></div>
-            <div class="logo-sub">VER.2026 // NAIKINTANTO UNIT</div>
+            <div class="logo-sub">v0.4.0 // AXIOM</div>
           </div>
         </div>
         <div class="header-actions" style="display:flex;align-items:center;gap:0.75rem;">
@@ -153,7 +153,9 @@
         <div class="snapshot-panel" id="snapshot-panel">
           <div class="snapshot-panel-header">
             <span><i class="fas fa-database"></i> SAVED SNAPSHOTS</span>
-            <span id="snapshot-status" class="snapshot-status"></span>
+            <button id="btn-bulk-import" class="btn btn-outline" style="font-size:0.72rem;padding:0.2rem 0.6rem;">
+              <i class="fas fa-folder-open"></i> 一括インポート
+            </button>
           </div>
           <div id="snapshot-list" class="snapshot-list">
             <div class="snapshot-empty"><i class="fas fa-spinner fa-spin"></i> 読み込み中...</div>
@@ -165,7 +167,7 @@
       <!-- ステップ2: 委託者情報取得 -->
       <section id="step-2" class="step-section">
         <h2 class="step-title"><i class="fas fa-users"></i> 委託者情報取得</h2>
-        <p class="step-desc">業務報告書から全員の情報を抽出します。「業務委託」タブと「その他」タブに分けて表示します。</p>
+        <p class="step-desc">業務報告書から全員の情報を抽出します。</p>
 
         <div class="step-actions">
           <button id="btn-step2-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
@@ -271,6 +273,9 @@
 
         <div class="step-actions">
           <button id="btn-step5-back" class="btn btn-outline"><i class="fas fa-arrow-left"></i> 戻る</button>
+          <button id="btn-step5-bulk-download" class="btn btn-success btn-lg" style="display:none">
+            <i class="fas fa-download"></i> 一括ダウンロード（業務委託＋DR）
+          </button>
           <button id="btn-step5-download" class="btn btn-success btn-lg">
             <i class="fas fa-download"></i> 内勤請求Excelをダウンロード
           </button>
@@ -280,23 +285,6 @@
           <button id="btn-step5-restart" class="btn btn-outline btn-lg">
             <i class="fas fa-redo"></i> 最初に戻る（STEP1）
           </button>
-        </div>
-
-        <!-- Step5 タブ -->
-        <div class="tab-bar">
-          <button class="tab-btn active" data-tab="tab-output-staff">
-            <i class="fas fa-user"></i> 業務委託
-          </button>
-          <button class="tab-btn" data-tab="tab-output-dr" id="tab-output-dr-btn" style="display:none">
-            <i class="fas fa-car"></i> DR
-          </button>
-        </div>
-
-        <div id="tab-output-staff" class="tab-content active">
-          <div id="invoice-preview-staff" class="data-table-wrap"></div>
-        </div>
-        <div id="tab-output-dr" class="tab-content">
-          <div id="invoice-preview-dr" class="data-table-wrap"></div>
         </div>
 
         <div class="note-box">
@@ -341,15 +329,78 @@
     </div>
   </div>
 
-  <script src="js/utils.js"></script>
-  <script src="js/db.js"></script>
-  <script src="js/parser-report.js"></script>
-  <script src="js/parser-monthly.js"></script>
-  <script src="js/parser-dr.js"></script>
-  <script src="js/reconcile.js"></script>
-  <script src="js/diff.js"></script>
-  <script src="js/output.js"></script>
-  <script src="js/app.js"></script>
+  <!-- 一括インポートモーダル -->
+  <div id="bulk-import-modal" class="snap-modal-overlay" style="display:none">
+    <div class="snap-modal" style="max-width:760px">
+      <div class="snap-modal-header">
+        <div>
+          <div class="snap-modal-title"><i class="fas fa-folder-open"></i> 過去ファイル一括インポート</div>
+          <div class="snap-modal-sub">フォルダを選択するとファイルを自動分類してスナップショットを保存します</div>
+        </div>
+        <button class="snap-modal-close" id="bulk-modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="snap-modal-body" style="padding:1rem">
+
+        <!-- 選択モード切り替え＋ドロップゾーン -->
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem">
+          <button id="bulk-mode-folder" class="btn btn-primary" style="font-size:0.78rem;flex:1">
+            <i class="fas fa-folder-open"></i> フォルダ選択
+          </button>
+          <button id="bulk-mode-file" class="btn btn-outline" style="font-size:0.78rem;flex:1">
+            <i class="fas fa-file-excel"></i> ファイル選択
+          </button>
+        </div>
+        <div id="bulk-drop-zone" style="border:2px dashed var(--border);border-radius:8px;padding:1.5rem;text-align:center;cursor:pointer;margin-bottom:1rem;transition:border-color .2s">
+          <input type="file" id="bulk-file-input" multiple webkitdirectory accept=".xlsx,.xls" style="display:none">
+          <i id="bulk-drop-icon" class="fas fa-folder-open" style="font-size:2rem;color:var(--text-muted);margin-bottom:0.5rem;display:block"></i>
+          <div id="bulk-drop-label" style="font-family:var(--font-mono);font-size:0.8rem;color:var(--text-muted)">クリックしてフォルダを選択</div>
+          <div id="bulk-drop-sub" style="font-size:0.72rem;color:var(--gray-400);margin-top:0.25rem">サブフォルダも含めて自動スキャンします。関係ないファイルは無視されます。</div>
+        </div>
+
+        <!-- 分類結果リスト -->
+        <div id="bulk-file-list" style="display:none;margin-bottom:1rem">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
+            <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted)">▸ 検出されたファイルセット</div>
+            <button id="btn-bulk-add" class="btn btn-outline" style="font-size:0.72rem;padding:0.2rem 0.6rem;">
+              <i class="fas fa-plus"></i> フォルダを追加
+            </button>
+          </div>
+          <input type="file" id="bulk-file-input-add-folder" multiple webkitdirectory accept=".xlsx,.xls" style="display:none">
+          <input type="file" id="bulk-file-input-add-file"   multiple accept=".xlsx,.xls" style="display:none">
+          <div id="bulk-file-table"></div>
+          <div id="bulk-ignored-count" style="font-size:0.72rem;color:var(--gray-400);margin-top:0.4rem;padding-left:0.25rem"></div>
+        </div>
+
+        <!-- 実行ボタン -->
+        <div id="bulk-actions" style="display:none;gap:0.5rem;justify-content:flex-end">
+          <button id="btn-bulk-cancel" class="btn btn-outline">キャンセル</button>
+          <button id="btn-bulk-run" class="btn btn-primary" disabled>
+            <i class="fas fa-play"></i> インポート実行
+          </button>
+        </div>
+
+        <!-- 進捗 -->
+        <div id="bulk-progress" style="display:none">
+          <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted);margin-bottom:0.5rem">▸ 処理中...</div>
+          <div id="bulk-progress-bar-wrap" style="background:var(--gray-100);border-radius:4px;height:8px;margin-bottom:0.75rem">
+            <div id="bulk-progress-bar" style="height:8px;border-radius:4px;background:var(--primary);width:0%;transition:width .3s"></div>
+          </div>
+          <div id="bulk-progress-log" style="font-size:0.78rem;max-height:200px;overflow-y:auto;font-family:var(--font-mono)"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="js/utils.js?v=202603300315"></script>
+  <script src="js/db.js?v=202603300315"></script>
+  <script src="js/parser-report.js?v=202603300315"></script>
+  <script src="js/parser-monthly.js?v=202603300315"></script>
+  <script src="js/parser-dr.js?v=202603300315"></script>
+  <script src="js/reconcile.js?v=202603300315"></script>
+  <script src="js/diff.js?v=202603300315"></script>
+  <script src="js/output.js?v=202603300315"></script>
+  <script src="js/app.js?v=202603300315"></script>
   <script>
     // サイバーパンク時計
     function updateClock() {

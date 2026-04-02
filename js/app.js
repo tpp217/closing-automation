@@ -52,8 +52,9 @@ document.addEventListener('DOMContentLoaded', () => {
   setupStep5();
   setupReset();
   setupTabs();
-  setupSnapshotModal(); // モーダルのイベント設定
-  loadSnapshotList();   // 起動時にスナップショット一覧を表示
+  setupSnapshotModal();
+  setupBulkImport();
+  loadSnapshotList();
 });
 
 // ==============================
@@ -121,9 +122,43 @@ async function handleDRFile(file) {
 
 function showFileInfo(elementId, name, size) {
   const el = $(elementId);
-  el.innerHTML = `<div class="file-name"><i class="fas fa-file-excel"></i> ${name}</div>
-  <div style="font-size:0.8rem;color:var(--gray-400);margin-top:2px">${(size / 1024).toFixed(1)} KB</div>`;
+  // elementId から対応する fileKey を特定（例: report-file-info → report）
+  const keyMap = { 'report-file-info': 'report', 'monthly-file-info': 'monthly', 'dr-file-info': 'dr' };
+  const fileKey = keyMap[elementId] || '';
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem">
+      <div>
+        <div class="file-name"><i class="fas fa-file-excel"></i> ${name}</div>
+        <div style="font-size:0.8rem;color:var(--gray-400);margin-top:2px">${(size / 1024).toFixed(1)} KB</div>
+      </div>
+      <button onclick="clearFile('${fileKey}')" title="削除" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:1.1rem;padding:0.2rem 0.4rem" aria-label="ファイルを削除">
+        <i class="fas fa-times-circle"></i>
+      </button>
+    </div>`;
   show(el);
+}
+
+function clearFile(fileKey) {
+  const infoId = { report: 'report-file-info', monthly: 'monthly-file-info', dr: 'dr-file-info' }[fileKey];
+  const inputId = { report: 'input-report', monthly: 'input-monthly', dr: 'input-dr' }[fileKey];
+  if (!infoId) return;
+  // AppState をクリア
+  if (fileKey === 'report')  { AppState.reportFile  = null; AppState.reportBuffer  = null; }
+  if (fileKey === 'monthly') { AppState.monthlyFile = null; AppState.monthlyBuffer = null; }
+  if (fileKey === 'dr')      { AppState.drFile      = null; AppState.drBuffer      = null; }
+  // ファイル情報エリアを非表示
+  const el = $(infoId);
+  if (el) { el.innerHTML = ''; hide(el); }
+  // input をリセット
+  const inp = $(inputId);
+  if (inp) inp.value = '';
+  // DR削除時は検出エリアのDR行も非表示
+  if (fileKey === 'dr') {
+    const drItem = $('detected-dr-item');
+    if (drItem) drItem.style.display = 'none';
+  }
+  updateStep1UI();
+  showToast('ファイルを削除しました', 'info');
 }
 
 function tryAutoDetect() {
@@ -168,7 +203,8 @@ async function runStep2() {
     // デバッグ用ログ（開発者ツールで確認可能）
     console.log('[Step2] 全員:', JSON.stringify(allPeople.map(c => ({
       name: c.name, role: c.role,
-      basicPayMan: c.basicPayMan, dailyPayYen: c.dailyPayYen
+      basicPayMan: c.basicPayMan, dailyPayYen: c.dailyPayYen,
+      companyName: c.companyName, representativeName: c.representativeName
     })), null, 2));
     if (warnings.length) console.warn('[Step2] 警告:', warnings);
 
@@ -244,14 +280,6 @@ function renderContractorsTable(people) {
     <span class="badge badge-gray">その他 ${others.length}名</span>
   `;
 
-  // タブバー
-  const tabBar = document.createElement('div');
-  tabBar.className = 'tab-bar';
-  tabBar.innerHTML = `
-    <button class="tab-btn active" data-ctab="tab-c2-contractor"><i class="fas fa-user-check"></i> 業務委託</button>
-    <button class="tab-btn" data-ctab="tab-c2-other"><i class="fas fa-users"></i> その他</button>
-  `;
-
   // テーブル生成ヘルパー
   function buildPeopleTable(rows) {
     const table = buildTable(headers, rows, row => {
@@ -288,43 +316,18 @@ function renderContractorsTable(people) {
     return table;
   }
 
-  // 各タブコンテンツ
-  const tabContractor = document.createElement('div');
-  tabContractor.id = 'tab-c2-contractor';
-  tabContractor.className = 'tab-content active';
-  if (contractors.length === 0) {
-    tabContractor.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--gray-400)">業務委託者がいません</div>';
-  } else {
-    tabContractor.appendChild(buildPeopleTable(contractors));
-  }
-
-  const tabOther = document.createElement('div');
-  tabOther.id = 'tab-c2-other';
-  tabOther.className = 'tab-content';
-  if (others.length === 0) {
-    tabOther.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--gray-400)">その他の方はいません</div>';
-  } else {
-    tabOther.appendChild(buildPeopleTable(others));
-  }
-
+  // タブなし・全員を1枚テーブルで表示
   wrap.innerHTML = '';
   wrap.appendChild(summary);
-  wrap.appendChild(tabBar);
-  wrap.appendChild(tabContractor);
-  wrap.appendChild(tabOther);
+  if (rowData.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:1.5rem;text-align:center;color:var(--gray-400)';
+    empty.textContent = '社員名簿に人員が見つかりません';
+    wrap.appendChild(empty);
+  } else {
+    wrap.appendChild(buildPeopleTable(rowData));
+  }
   show(wrap);
-
-  // タブ切り替えイベント（この要素内のみ）
-  tabBar.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      tabBar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      const targetId = btn.dataset.ctab;
-      [tabContractor, tabOther].forEach(el => el.classList.remove('active'));
-      const target = document.getElementById(targetId);
-      if (target) target.classList.add('active');
-    });
-  });
 }
 
 function maskAccountDisplay(num) {
@@ -438,10 +441,12 @@ async function runStep3() {
 }
 
 function renderReconcileKPI(results) {
-  const okCount = results.filter(r => r.status === 'OK').length;
-  const ngCount = results.filter(r => r.status === 'NG').length;
-  $('kpi-ok-count').textContent = okCount;
-  $('kpi-ng-count').textContent = ngCount;
+  const staffNg = results.filter(r => r.status === 'NG').length;
+  const staffOk = results.filter(r => r.status === 'OK').length;
+  const drNg = (AppState.drReconcileResults || []).filter(r => r.status === 'NG').length;
+  const drOk = (AppState.drReconcileResults || []).filter(r => r.status === 'OK').length;
+  $('kpi-ok-count').textContent = staffOk + drOk;
+  $('kpi-ng-count').textContent = staffNg + drNg;
   show($('reconcile-kpi'));
 }
 
@@ -609,7 +614,7 @@ async function runStep4() {
 
     // ── DR スナップショット保存・差分チェック ──
     if (AppState.drList && AppState.drList.length > 0) {
-      await saveDRSnapshot(AppState.drList, AppState.storeName, AppState.periodYm);
+      await saveDRSnapshot(AppState.drList, AppState.storeName, AppState.periodYm, AppState.drReconcileResults);
       const prevDrList = await getPrevDRSnapshot(AppState.storeName, AppState.periodYm);
       AppState.prevDrList = prevDrList;
 
@@ -787,25 +792,18 @@ function setupStep5() {
   $('btn-step5-back').addEventListener('click', () => goToStep(4));
   $('btn-step5-download').addEventListener('click', handleDownload);
   $('btn-step5-dr-download').addEventListener('click', handleDRDownload);
+  $('btn-step5-bulk-download').addEventListener('click', handleBulkDownload);
   $('btn-step5-restart').addEventListener('click', () => goToStep(1));
 }
 
 function runStep5() {
-  // 業務委託プレビュー
-  const { rows: staffRows, total: staffTotal } = buildInvoicePreviewData(AppState.contractors, AppState.periodYm);
-  renderInvoicePreview('invoice-preview-staff', staffRows, staffTotal, false);
-
-  // DRプレビュー
-  if (AppState.drList && AppState.drList.length > 0) {
-    const { rows: drRows, total: drTotal } = buildDRInvoicePreviewData(AppState.drList, AppState.periodYm);
-    renderInvoicePreview('invoice-preview-dr', drRows, drTotal, true);
-    $('tab-output-dr-btn').style.display = '';
+  // DRファイルがある場合のみDRダウンロード・一括ダウンロードボタンを表示
+  if (AppState.drBuffer) {
     $('btn-step5-dr-download').style.display = '';
+    $('btn-step5-bulk-download').style.display = '';
   } else {
-    $('tab-output-dr-btn').style.display = 'none';
     $('btn-step5-dr-download').style.display = 'none';
-    $('invoice-preview-dr').innerHTML = '<div style="padding:1rem;color:var(--gray-400)">DRファイルが未アップロードのため出力できません。</div>';
-    show($('invoice-preview-dr'));
+    $('btn-step5-bulk-download').style.display = 'none';
   }
 }
 
@@ -887,6 +885,12 @@ async function handleDownload() {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-download"></i> 内勤請求Excelをダウンロード';
   }
+}
+
+async function handleBulkDownload() {
+  // 業務委託・DRを連続してダウンロード
+  await handleDownload();
+  if (AppState.drFile) await handleDRDownload();
 }
 
 async function handleDRDownload() {
@@ -973,7 +977,7 @@ function renderDRReconcileTable(results) {
   const table = document.createElement('table');
   const thead = document.createElement('thead');
   const headRow = document.createElement('tr');
-  ['DRタブ名', '氏名', '月計表の科目（元データ）', 'DRファイル仮払', '月計表 日払い', 'ドライバー報酬', '適格請求支払手数料チェック', '判定', '理由', '承認'].forEach(label => {
+  ['DRタブ名', '氏名', '月計表の科目（元データ）', 'DRファイル仮払', '月計表 日払い', 'ドライバー報酬', '２％チェック', '判定', '理由', '承認'].forEach(label => {
     const th = document.createElement('th');
     th.textContent = label;
     headRow.appendChild(th);
@@ -1228,11 +1232,12 @@ async function openSnapshotModal(storeName, periodYm, periodLabel) {
     let prevY = y, prevMo = mo - 1;
     if (prevMo < 1) { prevMo = 12; prevY--; }
     const prevYm  = `${prevY}-${String(prevMo).padStart(2, '0')}`;
-    const prevRows = allStaff.filter(r => r.store_name === storeName && r.period_ym === prevYm);
+    const prevRows   = allStaff.filter(r => r.store_name === storeName && r.period_ym === prevYm);
+    const prevDrRows = allDR.filter(r => r.store_name === storeName && r.period_ym === prevYm);
 
     renderSnapPeopleTab(allRows);
     renderSnapReconcileTab(allRows, drRows);
-    renderSnapDiffTab(allRows, prevRows, prevYm);
+    renderSnapDiffTab(allRows, prevRows, prevYm, drRows, prevDrRows);
 
   } catch (e) {
     console.error('モーダルデータ取得エラー:', e);
@@ -1439,36 +1444,73 @@ function renderSnapReconcileTab(rows, drRows) {
   t.appendChild(tb);
   el.appendChild(t);
 
-  // DR情報（DRスナップショットがある場合）
+  // DR情報（DRスナップショットがある場合）— 業務委託と同じ列で表示
   if (drRows.length) {
     const h2 = document.createElement('div');
     h2.style.cssText = 'padding:1rem 0 0.3rem;font-family:var(--font-mono);font-size:0.67rem;color:var(--info);letter-spacing:0.1em;border-top:1px solid var(--border);margin-top:0.75rem;';
-    h2.textContent = `▸ DR ${drRows.length}名`;
+    const drNgCount = drRows.filter(r => r.reconcile_status === 'NG').length;
+    h2.innerHTML = `▸ DR ${drRows.length}名　<span class="badge ${drNgCount > 0 ? 'badge-ng' : 'badge-ok'}" style="vertical-align:middle">NG ${drNgCount}件</span>`;
     el.appendChild(h2);
 
-    // ステップ3のDRテーブルと同じ列：DRタブ名 / 氏名 / 仮払 / ドライバー報酬 / 合計
+    // 業務委託と同じ列順：氏名 / 区分 / 報告書日払い（仮払） / 月計表日払い / 判定 / 理由
     const t2 = document.createElement('table');
     t2.innerHTML = `<thead><tr>
-      <th>DRタブ名</th><th>氏名</th>
-      <th style="text-align:right">仮払（日払い）</th>
-      <th style="text-align:right">ドライバー報酬</th>
-      <th style="text-align:right">合計</th>
+      <th>氏名</th>
+      <th>区分</th>
+      <th style="text-align:right">DRファイル仮払</th>
+      <th style="text-align:right">月計表 日払い</th>
+      <th>判定</th>
+      <th>理由</th>
     </tr></thead>`;
     const tb2 = document.createElement('tbody');
-    drRows.forEach(r => {
+    const drSorted = [...drRows].sort((a, b) => {
+      if (a.reconcile_status === 'NG' && b.reconcile_status !== 'NG') return -1;
+      if (a.reconcile_status !== 'NG' && b.reconcile_status === 'NG') return 1;
+      return 0;
+    });
+    drSorted.forEach(r => {
       const tr = document.createElement('tr');
-      [
-        { v: r.sheet_name || '-' },
-        { v: r.person_name },
-        { v: formatYen(r.karibara_yen), align: 'right' },
-        { v: formatYen(r.driver_reward), align: 'right' },
-        { v: formatYen(r.total_amount),  align: 'right' }
-      ].forEach(col => {
-        const td = document.createElement('td');
-        td.textContent = col.v;
-        if (col.align) td.style.textAlign = col.align;
-        tr.appendChild(td);
-      });
+      if (r.reconcile_status === 'NG') tr.classList.add('snap-row-ng');
+
+      // 氏名
+      const nameTd = document.createElement('td');
+      nameTd.textContent = r.person_name;
+      nameTd.style.fontWeight = '700';
+      tr.appendChild(nameTd);
+
+      // 区分バッジ
+      const roleTd = document.createElement('td');
+      roleTd.innerHTML = '<span class="badge badge-info">DR</span>';
+      tr.appendChild(roleTd);
+
+      // DRファイル仮払
+      const kariTd = document.createElement('td');
+      kariTd.style.textAlign = 'right';
+      kariTd.textContent = Number(r.karibara_yen) > 0 ? formatYen(r.karibara_yen) : '-';
+      tr.appendChild(kariTd);
+
+      // 月計表日払い
+      const monTd = document.createElement('td');
+      monTd.style.textAlign = 'right';
+      const monYen = Number(r.reconcile_monthly_yen ?? 0);
+      monTd.textContent = monYen > 0 ? formatYen(monYen) : '-';
+      tr.appendChild(monTd);
+
+      // 判定バッジ
+      const stTd = document.createElement('td');
+      const st = r.reconcile_status ?? 'NONE';
+      if (st === 'OK') stTd.innerHTML = '<span class="badge badge-ok"><i class="fas fa-check"></i> OK</span>';
+      else if (st === 'NG') stTd.innerHTML = '<span class="badge badge-ng"><i class="fas fa-times"></i> NG</span>';
+      else stTd.innerHTML = '<span class="badge badge-gray">—</span>';
+      tr.appendChild(stTd);
+
+      // 理由
+      const reTd = document.createElement('td');
+      reTd.className = 'td-wrap';
+      reTd.textContent = r.reconcile_reason || '-';
+      reTd.style.fontSize = '0.78rem';
+      tr.appendChild(reTd);
+
       tb2.appendChild(tr);
     });
     t2.appendChild(tb2);
@@ -1476,7 +1518,7 @@ function renderSnapReconcileTab(rows, drRows) {
   }
 }
 
-function renderSnapDiffTab(currentRows, prevRows, prevYm) {
+function renderSnapDiffTab(currentRows, prevRows, prevYm, currentDrRows, prevDrRows) {
   const el = $('snap-tab-diff');
   if (!prevRows.length) {
     const [py, pm] = (prevYm || '').split('-');
@@ -1487,47 +1529,86 @@ function renderSnapDiffTab(currentRows, prevRows, prevYm) {
     return;
   }
 
-  // 前月マップ（氏名キー）
+  // 前月マップ（person_keyで照合）
   const prevMap = {};
   prevRows.forEach(r => { prevMap[r.person_key] = r; });
 
   const diffs = [];
+
   for (const r of currentRows) {
     const prev = prevMap[r.person_key];
     if (!prev) {
-      diffs.push({ name: r.person_name, label: '新規追加', before: '-', after: r.role || '-', severity: 'alert' });
+      diffs.push({ name: r.person_name, label: '新規追加', before: '-', after: r.role || '-', severity: 'info' });
       continue;
     }
-    if (Number(r.basic_pay_man) !== Number(prev.basic_pay_man))
+
+    let hasChange = false;
+
+    // 役職
+    if ((r.role || '') !== (prev.role || '')) {
+      diffs.push({ name: r.person_name, label: '役職変更', before: prev.role || '（空）', after: r.role || '（空）', severity: 'alert' });
+      hasChange = true;
+    }
+    // 基本給
+    if (Number(r.basic_pay_man) !== Number(prev.basic_pay_man)) {
       diffs.push({ name: r.person_name, label: '基本給変更', before: `${prev.basic_pay_man}万円`, after: `${r.basic_pay_man}万円`, severity: 'alert' });
-    if (Number(r.daily_pay_yen) !== Number(prev.daily_pay_yen))
-      diffs.push({ name: r.person_name, label: '日払い変更', before: formatYen(prev.daily_pay_yen), after: formatYen(r.daily_pay_yen), severity: 'alert' });
-    if (r.account_number && prev.account_number && r.account_number !== prev.account_number)
-      diffs.push({ name: r.person_name, label: '口座番号変更', before: '****' + String(prev.account_number).slice(-4), after: '****' + String(r.account_number).slice(-4), severity: 'alert' });
-    if (r.bank_name !== prev.bank_name && r.bank_name)
-      diffs.push({ name: r.person_name, label: '銀行変更', before: prev.bank_name || '-', after: r.bank_name, severity: 'alert' });
+      hasChange = true;
+    }
+    // 振込先（銀行名・支店名・口座種別・口座番号・名義カナ）
+    const bankFields = [
+      { key: 'bank_name',           label: '銀行名' },
+      { key: 'branch_name',         label: '支店名' },
+      { key: 'account_type',        label: '口座種別' },
+      { key: 'account_number',      label: '口座番号' },
+      { key: 'account_holder_kana', label: '名義カナ' }
+    ];
+    for (const f of bankFields) {
+      const cv = String(r[f.key] ?? '');
+      const pv = String(prev[f.key] ?? '');
+      if (cv !== pv) {
+        const dispBefore = f.key === 'account_number' ? ('****' + pv.slice(-4)) : (pv || '-');
+        const dispAfter  = f.key === 'account_number' ? ('****' + cv.slice(-4)) : (cv || '-');
+        diffs.push({ name: r.person_name, label: `振込先変更（${f.label}）`, before: dispBefore, after: dispAfter, severity: 'alert' });
+        hasChange = true;
+      }
+    }
+    // 会社名
+    if ((r.company_name || '') !== (prev.company_name || '')) {
+      diffs.push({ name: r.person_name, label: '会社名変更', before: prev.company_name || '（空）', after: r.company_name || '（空）', severity: 'alert' });
+      hasChange = true;
+    }
+    // 代表者名（日付は毎月変わるため対象外）
+    if ((r.representative_name || '') !== (prev.representative_name || '')) {
+      diffs.push({ name: r.person_name, label: '代表者名変更', before: prev.representative_name || '（空）', after: r.representative_name || '（空）', severity: 'alert' });
+      hasChange = true;
+    }
+
+    if (!hasChange) {
+      diffs.push({ name: r.person_name, label: '変更なし', before: '-', after: '-', severity: 'ok' });
+    }
   }
-  // 退職者
+
+  // 退職者（今月いない人）
   const currentKeys = new Set(currentRows.map(r => r.person_key));
   for (const r of prevRows) {
     if (!currentKeys.has(r.person_key))
-      diffs.push({ name: r.person_name, label: '退職／削除', before: r.role || '-', after: '-', severity: 'alert' });
+      diffs.push({ name: r.person_name, label: '削除', before: r.role || '-', after: '-', severity: 'info' });
   }
 
-  if (!diffs.length) {
-    el.innerHTML = '<div style="padding:1.5rem;text-align:center;font-family:var(--font-mono);font-size:0.75rem;color:var(--neon)">[ 差分なし ] 前月から変更はありません</div>';
-    return;
-  }
+  // alertを先頭に
+  const order = { alert: 0, info: 1, ok: 2 };
+  diffs.sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
 
   const t = document.createElement('table');
   t.innerHTML = `<thead><tr><th>氏名</th><th>変更種別</th><th>変更前</th><th>変更後</th></tr></thead>`;
   const tb = document.createElement('tbody');
   diffs.forEach(d => {
     const tr = document.createElement('tr');
-    tr.classList.add('snap-row-ng');
+    if (d.severity === 'alert') tr.classList.add('snap-row-ng');
     [d.name].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
     const labelTd = document.createElement('td');
-    labelTd.innerHTML = `<span class="badge badge-ng">${escapeHtml(d.label)}</span>`;
+    const badgeClass = d.severity === 'alert' ? 'badge-ng' : d.severity === 'info' ? 'badge-gray' : 'badge-ok';
+    labelTd.innerHTML = `<span class="badge ${badgeClass}">${escapeHtml(d.label)}</span>`;
     tr.appendChild(labelTd);
     [d.before, d.after].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
     tb.appendChild(tr);
@@ -1535,6 +1616,87 @@ function renderSnapDiffTab(currentRows, prevRows, prevYm) {
   t.appendChild(tb);
   el.innerHTML = '';
   el.appendChild(t);
+
+  // ── DR差分セクション ──
+  if (currentDrRows && currentDrRows.length) {
+    const h2 = document.createElement('div');
+    h2.style.cssText = 'padding:1rem 0 0.3rem;font-family:var(--font-mono);font-size:0.67rem;color:var(--info);letter-spacing:0.1em;border-top:1px solid var(--border);margin-top:1rem;';
+
+    const drDiffs = [];
+    const prevDrMap = {};
+    (prevDrRows || []).forEach(r => { prevDrMap[r.person_key] = r; });
+
+    for (const r of currentDrRows) {
+      const prev = prevDrMap[r.person_key];
+      if (!prev) {
+        drDiffs.push({ name: r.person_name, label: '新規追加', before: '-', after: '-', severity: 'info' });
+        continue;
+      }
+      let hasChange = false;
+      // ドライバー報酬は毎月変動するため差分チェック対象外
+      // 振込先
+      const drBankFields = [
+        { key: 'bank_name', label: '銀行名' }, { key: 'branch_name', label: '支店名' },
+        { key: 'account_type', label: '口座種別' }, { key: 'account_number', label: '口座番号' },
+        { key: 'account_holder_kana', label: '名義カナ' }
+      ];
+      for (const f of drBankFields) {
+        const cv = String(r[f.key] ?? ''), pv = String(prev[f.key] ?? '');
+        if (cv !== pv) {
+          const db = f.key === 'account_number' ? ('****' + pv.slice(-4)) : (pv || '-');
+          const da = f.key === 'account_number' ? ('****' + cv.slice(-4)) : (cv || '-');
+          drDiffs.push({ name: r.person_name, label: `振込先変更（${f.label}）`, before: db, after: da, severity: 'alert' });
+          hasChange = true;
+        }
+      }
+      // 会社名
+      const cComp = String(r.company_name ?? ''), pComp = String(prev.company_name ?? '');
+      if (cComp !== pComp && (cComp || pComp)) {
+        drDiffs.push({ name: r.person_name, label: '会社名変更', before: pComp || '（空）', after: cComp || '（空）', severity: 'alert' });
+        hasChange = true;
+      }
+      // 代表者名
+      const cRep = String(r.representative_name ?? ''), pRep = String(prev.representative_name ?? '');
+      if (cRep !== pRep && (cRep || pRep)) {
+        drDiffs.push({ name: r.person_name, label: '代表者名変更', before: pRep || '（空）', after: cRep || '（空）', severity: 'alert' });
+        hasChange = true;
+      }
+      if (!hasChange) drDiffs.push({ name: r.person_name, label: '変更なし', before: '-', after: '-', severity: 'ok' });
+    }
+    (prevDrRows || []).forEach(r => {
+      if (!currentDrRows.find(c => c.person_key === r.person_key))
+        drDiffs.push({ name: r.person_name, label: '削除', before: '-', after: '-', severity: 'info' });
+    });
+
+    drDiffs.sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
+    const alertCount = drDiffs.filter(d => d.severity === 'alert').length;
+    h2.innerHTML = `▸ DR差分 ${currentDrRows.length}名　<span class="badge ${alertCount > 0 ? 'badge-ng' : 'badge-ok'}" style="vertical-align:middle">要確認 ${alertCount}件</span>`;
+    el.appendChild(h2);
+
+    if (!prevDrRows || !prevDrRows.length) {
+      const msg = document.createElement('div');
+      msg.style.cssText = 'padding:0.75rem;font-size:0.78rem;color:var(--text-muted);';
+      msg.textContent = '前月DRスナップショットがないため差分を表示できません。';
+      el.appendChild(msg);
+    } else {
+      const t2 = document.createElement('table');
+      t2.innerHTML = `<thead><tr><th>氏名</th><th>変更種別</th><th>変更前</th><th>変更後</th></tr></thead>`;
+      const tb2 = document.createElement('tbody');
+      drDiffs.forEach(d => {
+        const tr = document.createElement('tr');
+        if (d.severity === 'alert') tr.classList.add('snap-row-ng');
+        [d.name].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+        const labelTd = document.createElement('td');
+        const bc = d.severity === 'alert' ? 'badge-ng' : d.severity === 'info' ? 'badge-gray' : 'badge-ok';
+        labelTd.innerHTML = `<span class="badge ${bc}">${escapeHtml(d.label)}</span>`;
+        tr.appendChild(labelTd);
+        [d.before, d.after].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+        tb2.appendChild(tr);
+      });
+      t2.appendChild(tb2);
+      el.appendChild(t2);
+    }
+  }
 }
 
 // ==============================
@@ -1547,4 +1709,250 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// ==============================
+// 一括インポート
+// ==============================
+function setupBulkImport() {
+  const btn            = $('btn-bulk-import');
+  const modal          = $('bulk-import-modal');
+  const closeBtn       = $('bulk-modal-close');
+  const cancelBtn      = $('btn-bulk-cancel');
+  const dropZone       = $('bulk-drop-zone');
+  const fileInput      = $('bulk-file-input');
+  const addBtn         = $('btn-bulk-add');
+  const addFolderInput = $('bulk-file-input-add-folder');
+  const addFileInput   = $('bulk-file-input-add-file');
+  const runBtn         = $('btn-bulk-run');
+  const modeFolderBtn  = $('bulk-mode-folder');
+  const modeFileBtn    = $('bulk-mode-file');
+
+  // モード切り替え（フォルダ / ファイル）
+  let folderMode = true;
+  function setMode(isFolder) {
+    folderMode = isFolder;
+    if (isFolder) {
+      fileInput.setAttribute('webkitdirectory', '');
+      fileInput.removeAttribute('multiple');
+      $('bulk-drop-icon').className = 'fas fa-folder-open';
+      $('bulk-drop-label').textContent = 'クリックしてフォルダを選択';
+      $('bulk-drop-sub').textContent   = 'サブフォルダも含めて自動スキャンします。関係ないファイルは無視されます。';
+      modeFolderBtn.className = 'btn btn-primary';
+      modeFileBtn.className   = 'btn btn-outline';
+    } else {
+      fileInput.removeAttribute('webkitdirectory');
+      fileInput.setAttribute('multiple', '');
+      $('bulk-drop-icon').className = 'fas fa-file-excel';
+      $('bulk-drop-label').textContent = 'クリックしてファイルを選択（複数可）';
+      $('bulk-drop-sub').textContent   = 'Ctrl/Shiftで複数選択できます。関係ないファイルは無視されます。';
+      modeFolderBtn.className = 'btn btn-outline';
+      modeFileBtn.className   = 'btn btn-primary';
+    }
+    fileInput.value = '';
+  }
+  modeFolderBtn.addEventListener('click', () => setMode(true));
+  modeFileBtn.addEventListener('click',   () => setMode(false));
+
+  btn.addEventListener('click', () => {
+    resetBulkModal();
+    modal.style.display = 'flex';
+  });
+  closeBtn.addEventListener('click',  () => { modal.style.display = 'none'; });
+  cancelBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+  modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+
+  // 初回選択
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; });
+  dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = 'var(--border)'; });
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.style.borderColor = 'var(--border)';
+    handleBulkFiles(Array.from(e.dataTransfer.files), false);
+  });
+  fileInput.addEventListener('change', e => {
+    handleBulkFiles(Array.from(e.target.files), false);
+    fileInput.value = '';
+  });
+
+  // 追加選択（フォルダ or ファイル）
+  addBtn.addEventListener('click', () => {
+    // 現在のモードに合わせて選択
+    if (folderMode) addFolderInput.click();
+    else            addFileInput.click();
+  });
+  addFolderInput.addEventListener('change', e => {
+    handleBulkFiles(Array.from(e.target.files), true);
+    addFolderInput.value = '';
+  });
+  addFileInput.addEventListener('change', e => {
+    handleBulkFiles(Array.from(e.target.files), true);
+    addFileInput.value = '';
+  });
+
+  runBtn.addEventListener('click', runBulkImport);
+}
+
+function resetBulkModal() {
+  $('bulk-file-list').style.display  = 'none';
+  $('bulk-actions').style.display    = 'none';
+  $('bulk-progress').style.display   = 'none';
+  $('bulk-file-table').innerHTML     = '';
+  $('bulk-progress-log').innerHTML   = '';
+  $('bulk-progress-bar').style.width = '0%';
+  $('btn-bulk-run').disabled         = true;
+  $('bulk-drop-zone').style.display  = 'block';
+  $('bulk-file-input').value         = '';
+  window._bulkSets   = [];
+  window._bulkMap    = {};
+  window._bulkIgnored = 0;
+}
+
+function handleBulkFiles(files, merge = false) {
+  // merge=true のときは既存マップに追加、false のときはリセット
+  const map = merge ? (window._bulkMap || {}) : {};
+  let ignoredCount = merge ? (window._bulkIgnored || 0) : 0;
+
+  for (const f of files) {
+    const name = f.name;
+    if (!/\.(xlsx|xls)$/i.test(name)) continue;
+
+    const { storeName, periodYm } = parseFileNameInfo(name);
+    if (!storeName || !periodYm) { ignoredCount++; continue; }
+
+    const isReport  = /業務報告書/.test(name);
+    const isMonthly = /月計表|内勤請求/.test(name);
+    const isDR      = /DR/.test(name);
+    if (!isReport && !isMonthly && !isDR) { ignoredCount++; continue; }
+
+    const key = `${storeName}__${periodYm}`;
+    if (!map[key]) map[key] = { storeName, periodYm, report: null, monthly: null, dr: null };
+    if (isReport)  map[key].report  = f;
+    if (isMonthly) map[key].monthly = f;
+    if (isDR)      map[key].dr      = f;
+  }
+
+  window._bulkMap    = map;
+  window._bulkIgnored = ignoredCount;
+
+  // 古い月から順にソート
+  const sets = Object.values(map).sort((a, b) => a.periodYm.localeCompare(b.periodYm));
+  window._bulkSets = sets;
+
+  // ドロップゾーンを隠して一覧を表示
+  $('bulk-drop-zone').style.display = 'none';
+
+  // テーブル表示
+  const tableEl = $('bulk-file-table');
+  if (sets.length === 0) {
+    tableEl.innerHTML = '<div style="padding:0.5rem;font-size:0.8rem;color:var(--danger)">認識できるファイルが見つかりませんでした。ファイル名に【店舗名】と年月が含まれているか確認してください。</div>';
+    $('btn-bulk-run').disabled = true;
+  } else {
+    const rows = sets.map(s => {
+      const rOk = s.report  ? `<span class="badge badge-ok" title="${escapeHtml(s.report.name)}">✓ あり</span>`  : '<span class="badge badge-ng">なし</span>';
+      const mOk = s.monthly ? `<span class="badge badge-ok" title="${escapeHtml(s.monthly.name)}">✓ あり</span>` : '<span class="badge badge-ng">なし</span>';
+      const dOk = s.dr      ? `<span class="badge badge-info" title="${escapeHtml(s.dr.name)}">✓ あり</span>`    : '<span class="badge badge-gray">なし</span>';
+      const canRun = s.report && s.monthly;
+      return `<tr style="${canRun ? '' : 'opacity:.5'}">
+        <td style="padding:4px 8px;font-weight:700">${escapeHtml(s.storeName)}</td>
+        <td style="padding:4px 8px">${s.periodYm.replace('-','年').replace(/(\d{2})$/,m=>parseInt(m)+'月')}</td>
+        <td style="padding:4px 8px">${rOk}</td>
+        <td style="padding:4px 8px">${mOk}</td>
+        <td style="padding:4px 8px">${dOk}</td>
+        <td style="padding:4px 8px">${canRun ? '<span class="badge badge-ok">処理可</span>' : '<span class="badge badge-warn"><i class="fas fa-forward"></i> スキップ</span>'}</td>
+      </tr>`;
+    }).join('');
+    tableEl.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+        <thead><tr style="background:var(--gray-50)">
+          <th style="padding:4px 8px;text-align:left">店舗</th>
+          <th style="padding:4px 8px;text-align:left">年月</th>
+          <th style="padding:4px 8px;text-align:left">業務報告書</th>
+          <th style="padding:4px 8px;text-align:left">月計表</th>
+          <th style="padding:4px 8px;text-align:left">DR</th>
+          <th style="padding:4px 8px;text-align:left">状態</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    const runnable = sets.filter(s => s.report && s.monthly).length;
+    const skipped  = sets.filter(s => !s.report || !s.monthly).length;
+    $('btn-bulk-run').disabled = runnable === 0;
+    $('btn-bulk-run').innerHTML = `<i class="fas fa-play"></i> 処理実行（${runnable}件${skipped > 0 ? `・${skipped}件スキップ` : ''}）`;
+  }
+
+  // 無視ファイル数を表示
+  const ignoredEl = $('bulk-ignored-count');
+  if (ignoredEl) ignoredEl.textContent = ignoredCount > 0 ? `※ 認識できなかったファイル ${ignoredCount}件は無視しました` : '';
+
+  $('bulk-file-list').style.display = 'block';
+  $('bulk-actions').style.display   = 'flex';
+}
+
+async function runBulkImport() {
+  const sets = (window._bulkSets || []).filter(s => s.report && s.monthly);
+  if (!sets.length) return;
+
+  $('bulk-drop-zone').style.display = 'none';
+  $('bulk-file-list').style.display = 'none';
+  $('bulk-actions').style.display   = 'none';
+  $('bulk-progress').style.display  = 'block';
+
+  const logEl = $('bulk-progress-log');
+  const barEl = $('bulk-progress-bar');
+
+  function log(msg, type = 'info') {
+    const colors = { info: 'var(--text-muted)', ok: 'var(--success)', error: 'var(--danger)', warn: 'var(--warning)' };
+    const line = document.createElement('div');
+    line.style.color = colors[type] || colors.info;
+    line.style.padding = '1px 0';
+    line.textContent = msg;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  let done = 0;
+  for (const s of sets) {
+    log(`[${s.storeName} ${s.periodYm}] 処理開始...`);
+    try {
+      const reportBuf  = await readFileAsArrayBuffer(s.report);
+      const monthlyBuf = await readFileAsArrayBuffer(s.monthly);
+      const drBuf      = s.dr ? await readFileAsArrayBuffer(s.dr) : null;
+
+      // パース
+      const { contractors: allPeople } = await parseReport(reportBuf);
+      const contractors = allPeople.filter(c => (c.role || '').includes('業務委託'));
+      const { dailyPayEntries } = await parseMonthly(monthlyBuf);
+
+      // 突合
+      const reconcileResults = reconcile(allPeople, dailyPayEntries);
+      let drList = [], drReconcileResults = [];
+      if (drBuf) {
+        const drParsed = await parseDR(drBuf);
+        drList = drParsed.drList;
+        drReconcileResults = reconcileDR(drList, dailyPayEntries);
+      }
+
+      // スナップショット保存
+      await saveSnapshot(allPeople, s.storeName, s.periodYm, reconcileResults);
+      if (drList.length) await saveDRSnapshot(drList, s.storeName, s.periodYm, drReconcileResults);
+
+      log(`[${s.storeName} ${s.periodYm}] ✅ 完了（委託者${contractors.length}名${drList.length ? `、DR${drList.length}名` : ''}）`, 'ok');
+    } catch (e) {
+      log(`[${s.storeName} ${s.periodYm}] ❌ エラー: ${e.message}`, 'error');
+    }
+    done++;
+    barEl.style.width = Math.round(done / sets.length * 100) + '%';
+  }
+
+  log(`─── 完了: ${done}件処理しました ───`, 'ok');
+  await loadSnapshotList();
+
+  // 閉じるボタンを追加
+  const closeBtn2 = document.createElement('button');
+  closeBtn2.className = 'btn btn-primary';
+  closeBtn2.style.cssText = 'margin-top:1rem;width:100%';
+  closeBtn2.textContent = '閉じる';
+  closeBtn2.addEventListener('click', () => { $('bulk-import-modal').style.display = 'none'; });
+  $('bulk-progress').appendChild(closeBtn2);
 }

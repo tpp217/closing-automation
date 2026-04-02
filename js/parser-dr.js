@@ -34,8 +34,9 @@
 
 // DRファイルで除外するシート
 const DR_EXCLUDE_SHEETS = ['ルール', 'シフト', '入力'];
-// 丸数字のシートも除外（空欄テンプレ）
-const DR_EXCLUDE_PATTERN = /^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]/;
+// 数字（半角・全角）や丸数字で始まるシートは空欄テンプレとして除外
+// ※ 漢数字（一二三…）は苗字の可能性があるため除外しない
+const DR_EXCLUDE_PATTERN = /^[0-9０-９①-⑳]/;
 
 // 個人タブの固定行（調査済み）
 const DR_ROW_NAME       = 11; // R12 → index 11: 氏名行
@@ -135,6 +136,22 @@ function parseDRPersonalSheet(ws, sheetName) {
   // ★ 口座情報: R38〜R41（index 37〜40）
   const bank = extractDRBankBlock(ws);
 
+  // ★ 会社名・代表者名（業務報告書と同じロジック）
+  const range2 = XLSX.utils.decode_range(ws['!ref']);
+  const endRow2 = Math.min(30, range2.e.r);
+  let companyName = null, representativeName = null;
+  for (let r2 = 0; r2 <= endRow2; r2++) {
+    for (let c2 = 0; c2 <= range2.e.c; c2++) {
+      const v2 = getCellValue(ws, r2, c2);
+      if (!v2) continue;
+      const s2 = String(v2).trim();
+      if (!companyName && /株式会社|有限会社|合同会社|合名会社|合資会社|Plus/.test(s2)) companyName = s2;
+      if (!representativeName && /代表取締役|取締役|代表社員|代表/.test(s2))
+        representativeName = s2.replace(/\s*様\s*$/, '').trim();
+    }
+    if (companyName && representativeName) break;
+  }
+
   // 氏名の検証
   if (!nameRaw) {
     warnings.push({ level: 'warn', message: `シート「${sheetName}」に氏名が見つかりません`, code: 'NAME_NOT_FOUND' });
@@ -145,10 +162,12 @@ function parseDRPersonalSheet(ws, sheetName) {
     name: nameRaw,
     sheetName,
     driverReward,
-    karibaraiYen,   // ← これが月計表の「DR○○ 日払い」と照合する値
-    actualFee,      // 適格請求支払手数料の実額
+    karibaraiYen,
+    actualFee,
     totalAmount,
     bank,
+    companyName,
+    representativeName,
     warnings
   };
 }
@@ -188,10 +207,8 @@ function extractDRBankBlock(ws) {
 
 /**
  * DR名寄せ用キー生成
- * 月計表の「DR能條　日払い」→ normalizePersonName → "能條"
- * DRタブの氏名「能條　正和」→ getSurname → "能條"
- * で照合する
+ * フルネームで照合して同姓の別人（例: 鈴木 隆宏 / 鈴木 潤）を区別する
  */
 function getDRKey(name) {
-  return getSurname(normText(name));
+  return normalizePersonName(normText(name));
 }
