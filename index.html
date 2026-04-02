@@ -433,10 +433,10 @@
 
       <!-- ドロップゾーン -->
       <div id="organizer-drop-zone" style="border:2px dashed var(--border);border-radius:8px;padding:2rem;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:1rem">
-        <input type="file" id="organizer-file-input" multiple accept=".zip,.xls,.xlsx,.xlsm" style="display:none">
+        <input type="file" id="organizer-file-input" multiple webkitdirectory style="display:none">
         <i class="fas fa-folder-open" style="font-size:2rem;color:var(--text-muted);margin-bottom:0.5rem;display:block"></i>
-        <div style="font-size:0.85rem;color:var(--text-muted)">クリックしてZIP・Excelファイルを選択</div>
-        <div style="font-size:0.72rem;color:var(--gray-400);margin-top:0.3rem">ZIP内のExcelも自動展開・仕分けします</div>
+        <div style="font-size:0.85rem;color:var(--text-muted)">クリックして整理対象のフォルダを選択</div>
+        <div style="font-size:0.72rem;color:var(--gray-400);margin-top:0.3rem">フォルダ内のZIPを展開し、Excelをキーワードで自動仕分けします</div>
       </div>
 
       <!-- 仕分けルール表示 -->
