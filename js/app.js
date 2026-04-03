@@ -828,33 +828,33 @@ async function renderReportSummary() {
 
     section.style.display = '';
 
-    // メタ情報（エリア・報告者・シート名）
+    // メタ情報
     const meta = $('report-summary-meta');
     if (meta && reportSummary) {
       const parts = [];
-      if (reportSummary.area)     parts.push(`エリア: ${reportSummary.area}`);
-      if (reportSummary.reporter) parts.push(`報告者: ${reportSummary.reporter}`);
-      if (dateSheetName)          parts.push(`対象月: ${dateSheetName}`);
-      meta.textContent = parts.length ? `（${parts.join(' / ')}）` : '';
+      if (reportSummary.area)     parts.push(reportSummary.area);
+      if (reportSummary.reporter) parts.push(reportSummary.reporter);
+      if (dateSheetName)          parts.push(dateSheetName);
+      meta.textContent = parts.length ? `[ ${parts.join(' / ')} ]` : '';
     }
 
-    // 各セクション
-    function setText(id, text) {
+    // テキストセット共通
+    function setBody(id, text) {
       const el = $(id);
       if (!el) return;
-      if (text) {
+      if (text && text.trim()) {
+        el.className = 'summary-card-body';
         el.textContent = text;
       } else {
-        el.textContent = '（記載なし）';
-        el.style.color = '#9ca3af';
-        el.style.fontStyle = 'italic';
+        el.className = 'summary-card-body is-empty';
+        el.textContent = '--- NO DATA ---';
       }
     }
 
     if (reportSummary) {
-      setText('summary-sales-report-body',  reportSummary.salesReport);
-      setText('summary-challenges-body',     reportSummary.challenges);
-      setText('summary-misc-report-body',    reportSummary.miscReport);
+      setBody('summary-sales-report-body', reportSummary.salesReport);
+      setBody('summary-challenges-body',   reportSummary.challenges);
+      setBody('summary-misc-report-body',  reportSummary.miscReport);
     }
 
     // スタッフ今後の課題
@@ -863,11 +863,12 @@ async function renderReportSummary() {
       staffGrid.innerHTML = '';
       const filtered = staffChallenges.filter(s => s.name);
       if (filtered.length === 0) {
-        staffGrid.innerHTML = '<div style="padding:0.5rem;color:#9ca3af;font-style:italic">データなし</div>';
+        staffGrid.innerHTML = '<div style="padding:0.5rem;color:var(--text-muted);font-family:var(--font-mono);font-size:0.72rem">--- NO STAFF DATA ---</div>';
       } else {
         filtered.forEach(s => {
           const card = document.createElement('div');
           card.className = 'staff-challenge-card';
+
           const nameEl = document.createElement('div');
           nameEl.className = 'staff-challenge-name';
           nameEl.textContent = s.name;
@@ -877,14 +878,16 @@ async function renderReportSummary() {
             roleEl.textContent = s.role;
             nameEl.appendChild(roleEl);
           }
+
           const textEl = document.createElement('div');
           if (s.challenge) {
             textEl.className = 'staff-challenge-text';
             textEl.textContent = s.challenge;
           } else {
             textEl.className = 'staff-challenge-empty';
-            textEl.textContent = '課題の記載なし';
+            textEl.textContent = '--- no challenge noted ---';
           }
+
           card.appendChild(nameEl);
           card.appendChild(textEl);
           staffGrid.appendChild(card);
@@ -892,9 +895,54 @@ async function renderReportSummary() {
       }
     }
 
+    // DB保存
+    await saveReportSummaryToDB({ reportSummary, staffChallenges, dateSheetName });
+
   } catch (e) {
-    console.warn('reportSummary parse error:', e);
+    console.warn('reportSummary render error:', e);
     if (section) section.style.display = 'none';
+  }
+}
+
+async function saveReportSummaryToDB({ reportSummary, staffChallenges, dateSheetName }) {
+  const statusEl = $('summary-save-status');
+  if (!statusEl) return;
+
+  // 店舗名・年月の特定
+  const storeName = AppState.storeName || (reportSummary?.area ?? '');
+  const periodYm  = AppState.periodYm  || (dateSheetName
+    ? (() => {
+        const [y, m] = dateSheetName.split('.');
+        return `${y}-${String(m).padStart(2, '0')}`;
+      })()
+    : '');
+
+  if (!storeName || !periodYm) {
+    statusEl.className = 'save-status err';
+    statusEl.textContent = '⚠ STORE/PERIOD UNKNOWN';
+    return;
+  }
+
+  try {
+    statusEl.className = 'save-status saving';
+    statusEl.textContent = '◌ SAVING...';
+
+    await saveBusinessReport({
+      storeName,
+      periodYm,
+      reporter:        reportSummary?.reporter      ?? '',
+      salesReport:     reportSummary?.salesReport    ?? '',
+      challenges:      reportSummary?.challenges     ?? '',
+      miscReport:      reportSummary?.miscReport     ?? '',
+      staffChallenges: staffChallenges ?? []
+    });
+
+    statusEl.className = 'save-status ok';
+    statusEl.textContent = '✓ SAVED';
+  } catch (e) {
+    console.warn('saveBusinessReport error:', e);
+    statusEl.className = 'save-status err';
+    statusEl.textContent = '✗ SAVE FAILED';
   }
 }
 
