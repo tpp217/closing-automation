@@ -546,3 +546,127 @@ function isDetailLabel(v) {
   // 業務・手当・料・費・金 などを含む場合は明細ラベルとみなす
   return /[業務手当料費金払給賞報酬]/.test(v);
 }
+
+// ==============================
+// 業務報告書サマリー抽出
+// ==============================
+
+/**
+ * 日付シート（例: "2024.12"）から業務報告書のサマリーを抽出する
+ * 抽出対象:
+ *   - A13: "報告事項・当月の売上について・問題点" ラベル → A14 が内容
+ *   - A24: "課題・対策・目標へのアプローチ" ラベル → A25 が内容
+ *   - A51: "報告事項" ラベル → A52 が内容
+ *   - エリア: F5、報告者: M5
+ */
+function extractReportSummary(ws) {
+  if (!ws || !ws['!ref']) return null;
+
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const maxRow = range.e.r;
+
+  // エリア・報告者
+  const area     = normText(String(getCellValue(ws, 4, 5) ?? ''));   // F5
+  const reporter = normText(String(getCellValue(ws, 4, 12) ?? '')); // M5
+
+  // ラベルを検索して次の行の値を取得するユーティリティ
+  function findSectionContent(labelPattern, contentCol = 0) {
+    for (let r = 0; r <= maxRow; r++) {
+      const v = normText(String(getCellValue(ws, r, 0) ?? ''));
+      if (labelPattern.test(v)) {
+        // 次の行から内容を取得（空行をスキップしながら最初の非空セルを結合）
+        const lines = [];
+        for (let rr = r + 1; rr <= Math.min(r + 15, maxRow); rr++) {
+          const cellVal = getCellValue(ws, rr, contentCol);
+          if (cellVal !== null && cellVal !== undefined && String(cellVal).trim()) {
+            lines.push(String(cellVal).trim());
+          } else if (lines.length > 0) {
+            // 一度内容が始まったら空行で終了
+            break;
+          }
+        }
+        return lines.join('\n') || null;
+      }
+    }
+    return null;
+  }
+
+  const salesReport  = findSectionContent(/報告事項[・・]当月の売上/);
+  const challenges   = findSectionContent(/課題[・・]対策[・・]目標/);
+  const miscReport   = findSectionContent(/^報告事項$/);
+
+  return { area, reporter, salesReport, challenges, miscReport };
+}
+
+/**
+ * 社員名簿＆査定シートから各スタッフの「今後の課題」を抽出する
+ * T列(c=19)に「今後の課題」ラベルがある行の次の行T列が内容
+ */
+function extractStaffChallenges(ws) {
+  if (!ws || !ws['!ref']) return [];
+
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const maxRow = range.e.r;
+  const COL_T = 19; // T列
+
+  const results = [];
+
+  // A列(c=0)に「氏名」ラベル → 氏名値を取得するブロック構造を利用
+  const blockHeaderRows = [];
+  for (let r = range.s.r; r <= maxRow; r++) {
+    const v = normText(String(getCellValue(ws, r, 0) ?? ''));
+    if (v === '氏名' || v === '氏　名') {
+      blockHeaderRows.push(r);
+    }
+  }
+
+  for (let bi = 0; bi < blockHeaderRows.length; bi++) {
+    const headerRow = blockHeaderRows[bi];
+    const nextBlockStart = bi + 1 < blockHeaderRows.length ? blockHeaderRows[bi + 1] : maxRow + 1;
+    const blockEnd = nextBlockStart - 1;
+
+    const nameRow = headerRow + 1;
+    const personName = normText(String(getCellValue(ws, nameRow, 0) ?? ''));
+    if (!personName) continue;
+
+    // ブロック内でT列(c=19)に「今後の課題」ラベルを探す
+    let challenge = null;
+    for (let r = headerRow; r <= blockEnd; r++) {
+      const v = normText(String(getCellValue(ws, r, COL_T) ?? ''));
+      if (v === '今後の課題' || v.includes('今後の課題')) {
+        const val = getCellValue(ws, r + 1, COL_T);
+        if (val !== null && val !== undefined && String(val).trim()) {
+          challenge = String(val).trim();
+        }
+        break;
+      }
+    }
+
+    // 役職取得 (T列 nameRow)
+    const role = normText(String(getCellValue(ws, nameRow, COL_T) ?? ''));
+
+    results.push({ name: personName, role, challenge });
+  }
+
+  return results;
+}
+
+/**
+ * 業務報告書バッファからサマリーと課題を一括抽出
+ */
+async function parseReportSummary(buffer) {
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: false });
+
+  // 日付シート（例: 2024.12）を検索
+  const dateSheetName = wb.SheetNames.find(n => /^\d{4}\.\d{1,2}$/.test(n.trim()));
+  const reportSummary = dateSheetName ? extractReportSummary(wb.Sheets[dateSheetName]) : null;
+
+  // 社員名簿シートを検索
+  const rosterName = wb.SheetNames.find(n =>
+    ['社員名簿＆査定', '社員名簿&査定', '社員名簿', '名簿'].includes(n) ||
+    n.includes('社員') || n.includes('名簿')
+  );
+  const staffChallenges = rosterName ? extractStaffChallenges(wb.Sheets[rosterName]) : [];
+
+  return { reportSummary, staffChallenges, dateSheetName, rosterName };
+}
