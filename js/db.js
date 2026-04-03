@@ -268,3 +268,55 @@ async function getAllSnapshotRows() {
   ]);
   return { staffRows, drRows };
 }
+
+// ── 業務報告データ (business_reports) ────────────────────────
+
+const REPORT_TABLE = 'business_reports';
+
+/**
+ * 業務報告データを保存（同店舗・同年月を上書き）
+ */
+async function saveBusinessReport({ storeName, periodYm, reporter, salesReport, challenges, miscReport, staffChallenges }) {
+  // 既存の同店舗・同年月を削除
+  await deleteBusinessReport(storeName, periodYm);
+
+  const row = {
+    store_name:        storeName,
+    period_ym:         periodYm,
+    reporter:          reporter          ?? '',
+    sales_report:      salesReport       ?? '',
+    challenges:        challenges        ?? '',
+    misc_report:       miscReport        ?? '',
+    staff_challenges:  JSON.stringify(staffChallenges ?? []),
+    saved_at:          new Date().toISOString()
+  };
+
+  return apiPost(REPORT_TABLE, [row]);
+}
+
+/**
+ * 業務報告データを取得
+ */
+async function getBusinessReport(storeName, periodYm) {
+  const rows = await apiGet(REPORT_TABLE, { store_name: storeName, period_ym: periodYm });
+  if (!rows || rows.length === 0) return null;
+  const r = rows[0];
+  return {
+    storeName:       r.store_name,
+    periodYm:        r.period_ym,
+    reporter:        r.reporter        ?? '',
+    salesReport:     r.sales_report    ?? '',
+    challenges:      r.challenges      ?? '',
+    miscReport:      r.misc_report     ?? '',
+    staffChallenges: JSON.parse(r.staff_challenges || '[]'),
+    savedAt:         r.saved_at        ?? ''
+  };
+}
+
+/**
+ * 指定店舗・年月の業務報告データを削除
+ */
+async function deleteBusinessReport(storeName, periodYm) {
+  const rows = await apiGet(REPORT_TABLE, { store_name: storeName, period_ym: periodYm });
+  await Promise.all(rows.map(r => apiDelete(REPORT_TABLE, r.id)));
+}

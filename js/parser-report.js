@@ -629,11 +629,20 @@ function extractStaffChallenges(ws) {
     const personName = normText(String(getCellValue(ws, nameRow, 0) ?? ''));
     if (!personName) continue;
 
-    // ブロック内でT列(c=19)に「今後の課題」ラベルを探す
+    // ブロック内でT列(c=19)に「今後の課題」または「昇給理由」ラベルを探す
     let challenge = null;
+    let challengeLabel = '今後の課題';
     for (let r = headerRow; r <= blockEnd; r++) {
       const v = normText(String(getCellValue(ws, r, COL_T) ?? ''));
       if (v === '今後の課題' || v.includes('今後の課題')) {
+        challengeLabel = '今後の課題';
+        const val = getCellValue(ws, r + 1, COL_T);
+        if (val !== null && val !== undefined && String(val).trim()) {
+          challenge = String(val).trim();
+        }
+        break;
+      } else if (v === '昇給理由' || v.includes('昇給理由')) {
+        challengeLabel = '昇給理由';
         const val = getCellValue(ws, r + 1, COL_T);
         if (val !== null && val !== undefined && String(val).trim()) {
           challenge = String(val).trim();
@@ -645,7 +654,7 @@ function extractStaffChallenges(ws) {
     // 役職取得 (T列 nameRow)
     const role = normText(String(getCellValue(ws, nameRow, COL_T) ?? ''));
 
-    results.push({ name: personName, role, challenge });
+    results.push({ name: personName, role, challenge, challengeLabel });
   }
 
   return results;
