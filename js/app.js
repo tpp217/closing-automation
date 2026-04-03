@@ -879,16 +879,22 @@ async function renderReportSummary() {
             nameEl.appendChild(roleEl);
           }
 
+          // 「今後の課題」or「昇給理由」ラベル表示
+          const labelEl = document.createElement('div');
+          labelEl.className = 'staff-challenge-label';
+          labelEl.textContent = s.challengeLabel || '今後の課題';
+
           const textEl = document.createElement('div');
           if (s.challenge) {
             textEl.className = 'staff-challenge-text';
             textEl.textContent = s.challenge;
           } else {
             textEl.className = 'staff-challenge-empty';
-            textEl.textContent = '--- no challenge noted ---';
+            textEl.textContent = '--- no data ---';
           }
 
           card.appendChild(nameEl);
+          card.appendChild(labelEl);
           card.appendChild(textEl);
           staffGrid.appendChild(card);
         });
