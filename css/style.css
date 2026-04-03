@@ -1168,3 +1168,86 @@ tr.row-dr-ng td     { background: rgba(255,51,85,0.05); }
 .snap-modal-body tr:last-child td { border-bottom: none; }
 .snap-modal-body tr.snap-row-ng td { background: rgba(255,51,85,0.05); }
 .snap-modal-body tr.snap-row-employee td { opacity: 0.55; }
+
+/* ==============================
+   業務報告書サマリー (STEP5)
+   ============================== */
+.summary-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.summary-card-title {
+  background: var(--gray-50, #f9fafb);
+  border-bottom: 1px solid var(--gray-200);
+  padding: 0.6rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--gray-700, #374151);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.summary-card-title i {
+  color: var(--primary, #2563eb);
+  font-size: 0.78rem;
+}
+.summary-card-body {
+  padding: 0.8rem 1rem;
+  font-size: 0.84rem;
+  color: var(--gray-700, #374151);
+  white-space: pre-wrap;
+  line-height: 1.7;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.summary-staff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+}
+.staff-challenge-card {
+  background: var(--gray-50, #f9fafb);
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+}
+.staff-challenge-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--gray-800, #1f2937);
+  margin-bottom: 0.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.staff-challenge-role {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--primary, #2563eb);
+  background: #eff6ff;
+  border-radius: 3px;
+  padding: 0 5px;
+}
+.staff-challenge-text {
+  font-size: 0.78rem;
+  color: var(--gray-600, #4b5563);
+  white-space: pre-wrap;
+  line-height: 1.6;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.staff-challenge-empty {
+  font-size: 0.78rem;
+  color: var(--gray-400, #9ca3af);
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  #report-summary-section > div:first-of-type {
+    grid-template-columns: 1fr;
+  }
+}
