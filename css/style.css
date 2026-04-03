@@ -1252,10 +1252,10 @@ tr.row-dr-ng td     { background: rgba(255,51,85,0.05); }
 .summary-card-body {
   padding: 0.75rem 0.85rem;
   font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+  font-size: 0.78rem;
+  color: var(--text-primary);
   white-space: pre-wrap;
-  line-height: 1.75;
+  line-height: 1.8;
   max-height: 200px;
   overflow-y: auto;
 }
@@ -1319,9 +1319,9 @@ tr.row-dr-ng td     { background: rgba(255,51,85,0.05); }
 
 .staff-challenge-name {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 400;
-  color: var(--text-primary);
+  color: var(--text-accent);
   letter-spacing: 0.05em;
   margin-bottom: 0.25rem;
   display: flex;
@@ -1341,10 +1341,10 @@ tr.row-dr-ng td     { background: rgba(255,51,85,0.05); }
 
 .staff-challenge-text {
   font-family: var(--font-mono);
-  font-size: 0.71rem;
-  color: var(--text-secondary);
+  font-size: 0.74rem;
+  color: var(--text-primary);
   white-space: pre-wrap;
-  line-height: 1.65;
+  line-height: 1.7;
   max-height: 110px;
   overflow-y: auto;
 }
@@ -1361,4 +1361,14 @@ tr.row-dr-ng td     { background: rgba(255,51,85,0.05); }
 
 @media (max-width: 768px) {
   .summary-grid-2 { grid-template-columns: 1fr; }
+}
+
+.staff-challenge-label {
+  font-family: var(--font-mono);
+  font-size: 0.60rem;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 0.2rem;
+  opacity: 0.8;
 }
