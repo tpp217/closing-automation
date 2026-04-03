@@ -804,6 +804,98 @@ function runStep5() {
     $('btn-step5-dr-download').style.display = 'none';
     $('btn-step5-bulk-download').style.display = 'none';
   }
+
+  // 業務報告書サマリーを描画
+  renderReportSummary();
+}
+
+async function renderReportSummary() {
+  const section = $('report-summary-section');
+  if (!section) return;
+
+  if (!AppState.reportBuffer) {
+    section.style.display = 'none';
+    return;
+  }
+
+  try {
+    const { reportSummary, staffChallenges, dateSheetName } = await parseReportSummary(AppState.reportBuffer);
+
+    if (!reportSummary && (!staffChallenges || staffChallenges.length === 0)) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = '';
+
+    // メタ情報（エリア・報告者・シート名）
+    const meta = $('report-summary-meta');
+    if (meta && reportSummary) {
+      const parts = [];
+      if (reportSummary.area)     parts.push(`エリア: ${reportSummary.area}`);
+      if (reportSummary.reporter) parts.push(`報告者: ${reportSummary.reporter}`);
+      if (dateSheetName)          parts.push(`対象月: ${dateSheetName}`);
+      meta.textContent = parts.length ? `（${parts.join(' / ')}）` : '';
+    }
+
+    // 各セクション
+    function setText(id, text) {
+      const el = $(id);
+      if (!el) return;
+      if (text) {
+        el.textContent = text;
+      } else {
+        el.textContent = '（記載なし）';
+        el.style.color = '#9ca3af';
+        el.style.fontStyle = 'italic';
+      }
+    }
+
+    if (reportSummary) {
+      setText('summary-sales-report-body',  reportSummary.salesReport);
+      setText('summary-challenges-body',     reportSummary.challenges);
+      setText('summary-misc-report-body',    reportSummary.miscReport);
+    }
+
+    // スタッフ今後の課題
+    const staffGrid = $('summary-staff-challenges-body');
+    if (staffGrid) {
+      staffGrid.innerHTML = '';
+      const filtered = staffChallenges.filter(s => s.name);
+      if (filtered.length === 0) {
+        staffGrid.innerHTML = '<div style="padding:0.5rem;color:#9ca3af;font-style:italic">データなし</div>';
+      } else {
+        filtered.forEach(s => {
+          const card = document.createElement('div');
+          card.className = 'staff-challenge-card';
+          const nameEl = document.createElement('div');
+          nameEl.className = 'staff-challenge-name';
+          nameEl.textContent = s.name;
+          if (s.role) {
+            const roleEl = document.createElement('span');
+            roleEl.className = 'staff-challenge-role';
+            roleEl.textContent = s.role;
+            nameEl.appendChild(roleEl);
+          }
+          const textEl = document.createElement('div');
+          if (s.challenge) {
+            textEl.className = 'staff-challenge-text';
+            textEl.textContent = s.challenge;
+          } else {
+            textEl.className = 'staff-challenge-empty';
+            textEl.textContent = '課題の記載なし';
+          }
+          card.appendChild(nameEl);
+          card.appendChild(textEl);
+          staffGrid.appendChild(card);
+        });
+      }
+    }
+
+  } catch (e) {
+    console.warn('reportSummary parse error:', e);
+    if (section) section.style.display = 'none';
+  }
 }
 
 function renderInvoicePreview(wrapperId, rows, total, isDR) {
