@@ -1169,85 +1169,196 @@ tr.row-dr-ng td     { background: rgba(255,51,85,0.05); }
 .snap-modal-body tr.snap-row-ng td { background: rgba(255,51,85,0.05); }
 .snap-modal-body tr.snap-row-employee td { opacity: 0.55; }
 
+
 /* ==============================
    業務報告書サマリー (STEP5)
+   ダークテーマ統一版
    ============================== */
-.summary-card {
-  background: #fff;
-  border: 1px solid var(--gray-200);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+#report-summary-section {
+  margin-top: 1.5rem;
 }
+
+#report-summary-section h3 {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  color: var(--neon);
+  text-shadow: 0 0 8px var(--neon-glow);
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+#report-summary-section h3::before {
+  content: '◆';
+  font-size: 0.55rem;
+  opacity: 0.7;
+}
+
+#report-summary-meta {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  text-transform: none;
+}
+
+.summary-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.summary-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  clip-path: var(--clip-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.summary-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--neon-border), transparent);
+  opacity: 0.6;
+}
+
 .summary-card-title {
-  background: var(--gray-50, #f9fafb);
-  border-bottom: 1px solid var(--gray-200);
-  padding: 0.6rem 1rem;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--gray-700, #374151);
+  background: rgba(0,255,136,0.04);
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  color: var(--neon);
+  text-transform: uppercase;
   display: flex;
   align-items: center;
   gap: 0.4rem;
 }
+
 .summary-card-title i {
-  color: var(--primary, #2563eb);
-  font-size: 0.78rem;
+  font-size: 0.6rem;
+  opacity: 0.8;
 }
+
 .summary-card-body {
-  padding: 0.8rem 1rem;
-  font-size: 0.84rem;
-  color: var(--gray-700, #374151);
+  padding: 0.75rem 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
   white-space: pre-wrap;
-  line-height: 1.7;
-  max-height: 220px;
+  line-height: 1.75;
+  max-height: 200px;
   overflow-y: auto;
 }
+
+.summary-card-body::-webkit-scrollbar { width: 3px; }
+.summary-card-body::-webkit-scrollbar-track { background: transparent; }
+.summary-card-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.summary-card-body.is-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* DB保存ステータスバー */
+.summary-save-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+
+.summary-save-bar .save-status {
+  margin-left: auto;
+  font-size: 0.62rem;
+}
+
+.summary-save-bar .save-status.ok    { color: var(--success); text-shadow: 0 0 6px var(--neon-glow); }
+.summary-save-bar .save-status.err   { color: var(--danger); }
+.summary-save-bar .save-status.saving { color: var(--warning); }
+
+/* スタッフ課題グリッド */
 .summary-staff-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 0.75rem;
-  padding: 0.8rem 1rem;
+  gap: 0.6rem;
+  padding: 0.75rem 0.85rem;
 }
+
 .staff-challenge-card {
-  background: var(--gray-50, #f9fafb);
-  border: 1px solid var(--gray-200);
-  border-radius: 6px;
-  padding: 0.65rem 0.85rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  clip-path: var(--clip-sm);
+  padding: 0.6rem 0.75rem;
+  position: relative;
 }
+
+.staff-challenge-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 2px;
+  height: 100%;
+  background: var(--neon);
+  box-shadow: 0 0 6px var(--neon-glow);
+  opacity: 0.5;
+}
+
 .staff-challenge-name {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--gray-800, #1f2937);
-  margin-bottom: 0.15rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
   display: flex;
   align-items: center;
   gap: 0.4rem;
 }
+
 .staff-challenge-role {
-  font-size: 0.72rem;
-  font-weight: 400;
-  color: var(--primary, #2563eb);
-  background: #eff6ff;
-  border-radius: 3px;
+  font-size: 0.62rem;
+  color: var(--neon-dim);
+  background: var(--neon-bg);
+  border: 1px solid var(--neon-border);
+  border-radius: var(--radius-sm);
   padding: 0 5px;
+  letter-spacing: 0.05em;
 }
+
 .staff-challenge-text {
-  font-size: 0.78rem;
-  color: var(--gray-600, #4b5563);
+  font-family: var(--font-mono);
+  font-size: 0.71rem;
+  color: var(--text-secondary);
   white-space: pre-wrap;
-  line-height: 1.6;
-  max-height: 120px;
+  line-height: 1.65;
+  max-height: 110px;
   overflow-y: auto;
 }
+
+.staff-challenge-text::-webkit-scrollbar { width: 2px; }
+.staff-challenge-text::-webkit-scrollbar-thumb { background: var(--border); }
+
 .staff-challenge-empty {
-  font-size: 0.78rem;
-  color: var(--gray-400, #9ca3af);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
   font-style: italic;
 }
 
 @media (max-width: 768px) {
-  #report-summary-section > div:first-of-type {
-    grid-template-columns: 1fr;
-  }
+  .summary-grid-2 { grid-template-columns: 1fr; }
 }
