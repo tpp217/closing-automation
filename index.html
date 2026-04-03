@@ -307,6 +307,39 @@
           DR: 距離計算フォーマットの各個人タブ（加藤・★能條 等）をコピー。<br>
           書式・罫線・色・結合はすべて元ファイルと完全一致します。
         </div>
+
+        <!-- 業務報告書サマリー -->
+        <div id="report-summary-section" style="display:none;margin-top:1.5rem">
+          <h3 style="font-size:1rem;font-weight:700;color:var(--gray-700);margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem">
+            <i class="fas fa-clipboard-list" style="color:var(--primary)"></i> 業務報告書サマリー
+            <span id="report-summary-meta" style="font-size:0.8rem;font-weight:400;color:var(--gray-400)"></span>
+          </h3>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+            <!-- 報告事項・当月の売上について・問題点 -->
+            <div class="summary-card" id="summary-sales-report">
+              <div class="summary-card-title"><i class="fas fa-chart-bar"></i> 報告事項・当月の売上について・問題点</div>
+              <div class="summary-card-body" id="summary-sales-report-body"></div>
+            </div>
+            <!-- 課題・対策・目標へのアプローチ -->
+            <div class="summary-card" id="summary-challenges">
+              <div class="summary-card-title"><i class="fas fa-bullseye"></i> 課題・対策・目標へのアプローチ</div>
+              <div class="summary-card-body" id="summary-challenges-body"></div>
+            </div>
+          </div>
+
+          <!-- 報告事項 -->
+          <div class="summary-card" style="margin-bottom:1rem" id="summary-misc-report">
+            <div class="summary-card-title"><i class="fas fa-bell"></i> 報告事項</div>
+            <div class="summary-card-body" id="summary-misc-report-body"></div>
+          </div>
+
+          <!-- スタッフ今後の課題 -->
+          <div class="summary-card" id="summary-staff-challenges">
+            <div class="summary-card-title"><i class="fas fa-users"></i> スタッフ今後の課題</div>
+            <div id="summary-staff-challenges-body" class="summary-staff-grid"></div>
+          </div>
+        </div>
       </section>
 
     </main>
