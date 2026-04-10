@@ -1531,11 +1531,14 @@ function renderSnapPeopleTab(rows) {
     const tr = document.createElement('tr');
     if (!isContractor) tr.classList.add('snap-row-employee');
 
-    const otherItems = JSON.parse(r.other_items_json || '[]');
+    const otherItems = typeof r.other_items_json === 'string'
+      ? JSON.parse(r.other_items_json || '[]') : (r.other_items_json ?? []);
     const otherText  = otherItems.length
       ? otherItems.map(o => `${o.label}:${formatYen(o.amount)}`).join(' / ')
       : '-';
-    const warnCount = JSON.parse(r.warnings_json || '[]').length;
+    const warnings = typeof r.warnings_json === 'string'
+      ? JSON.parse(r.warnings_json || '[]') : (r.warnings_json ?? []);
+    const warnCount = warnings.length;
     const warnText  = warnCount > 0 ? `⚠ ${warnCount}件` : '✓';
 
     // 列定義（ステップ2と同じ順）
