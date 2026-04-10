@@ -1,10 +1,8 @@
 /**
  * config.js - アプリ設定
  *
- * APIキーはここで設定します。
- * このファイルは .gitignore に追加してください（本番運用時）。
+ * Supabase接続情報
  */
 
-// tpp-api の認証キー
-// 販売先クライアントの場合はここを差し替えるだけでOK
-window.TPP_API_KEY = 'a0ea116d6d2e7825390a4ca9e808f6f174087e9abf2fd89bb2e26750c6db1b80';
+window.SUPABASE_URL = 'https://urzflutzgcioqswzmpkz.supabase.co';
+window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyemZsdXR6Z2Npb3Fzd3ptcGt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3OTI4MjMsImV4cCI6MjA5MTM2ODgyM30.lifrqx8wIc56fKNQVuuE-hLtxzwNojxZNDbIylHS9dQ';
