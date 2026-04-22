@@ -976,8 +976,63 @@ tr.snap-row-employee { color: var(--text-3); }
 .summary-staff-grid {
   padding: 14px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 10px;
+}
+
+/* スタッフ課題カード */
+.staff-challenge-card {
+  background: var(--surface);
+  border: 1px solid var(--border-c);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.staff-challenge-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.staff-challenge-role {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 10.5px;
+  font-weight: 500;
+  border-radius: 3px;
+  letter-spacing: 0.01em;
+}
+.staff-challenge-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  padding-top: 2px;
+  border-top: 1px dashed var(--border-c);
+}
+.staff-challenge-text {
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.staff-challenge-empty {
+  font-size: 12px;
+  color: var(--text-mute);
+  font-style: italic;
 }
 .summary-save-bar {
   padding: 9px 14px;
