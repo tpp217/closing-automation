@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=202604230003">
+  <link rel="stylesheet" href="css/style.css?v=202605010001">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
@@ -29,7 +29,7 @@
           <i class="fas fa-file-invoice-dollar"></i>
           <div>
             <div class="logo-main">締め作業自動化システム</div>
-            <div class="logo-sub">内勤請求チェック / v0.4.0</div>
+            <div class="logo-sub">内勤請求チェック / v0.5.0</div>
           </div>
         </div>
         <div class="header-actions" style="display:flex;align-items:center;gap:12px;">
@@ -334,6 +334,19 @@
             </div>
           </div>
 
+          <div class="summary-grid-2">
+            <!-- 結果 -->
+            <div class="summary-card">
+              <div class="summary-card-title"><i class="fas fa-flag-checkered"></i> 結果</div>
+              <div class="summary-card-body" id="summary-result-body"></div>
+            </div>
+            <!-- スタッフシフト -->
+            <div class="summary-card">
+              <div class="summary-card-title"><i class="fas fa-calendar-alt"></i> スタッフシフト</div>
+              <div class="summary-card-body" id="summary-shift-body"></div>
+            </div>
+          </div>
+
           <!-- 報告事項 -->
           <div class="summary-card" style="margin-bottom:12px">
             <div class="summary-card-title"><i class="fas fa-bell"></i> その他の報告</div>
@@ -449,16 +462,16 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="js/utils.js?v=202604100001"></script>
-  <script src="js/config.js?v=202604100001"></script>
-  <script src="js/db.js?v=202604100001"></script>
-  <script src="js/parser-report.js?v=202604100001"></script>
-  <script src="js/parser-monthly.js?v=202604100001"></script>
-  <script src="js/parser-dr.js?v=202604100001"></script>
-  <script src="js/reconcile.js?v=202604100001"></script>
-  <script src="js/diff.js?v=202604100001"></script>
-  <script src="js/output.js?v=202604100001"></script>
-  <script src="js/app.js?v=202604100001"></script>
+  <script src="js/utils.js?v=202605010001"></script>
+  <script src="js/config.js?v=202605010001"></script>
+  <script src="js/db.js?v=202605010001"></script>
+  <script src="js/parser-report.js?v=202605010001"></script>
+  <script src="js/parser-monthly.js?v=202605010001"></script>
+  <script src="js/parser-dr.js?v=202605010001"></script>
+  <script src="js/reconcile.js?v=202605010001"></script>
+  <script src="js/diff.js?v=202605010001"></script>
+  <script src="js/output.js?v=202605010001"></script>
+  <script src="js/app.js?v=202605010001"></script>
   <script>
     // サイバーパンク時計
     function updateClock() {
@@ -488,8 +501,9 @@
       <div id="organizer-drop-zone" style="border:2px dashed var(--border);border-radius:8px;padding:2rem;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:1rem">
         <input type="file" id="organizer-file-input" multiple webkitdirectory style="display:none">
         <i class="fas fa-folder-open" style="font-size:2rem;color:var(--text-muted);margin-bottom:0.5rem;display:block"></i>
-        <div style="font-size:0.85rem;color:var(--text-muted)">クリックして整理対象のフォルダを選択</div>
+        <div style="font-size:0.85rem;color:var(--text-muted)">クリックしてフォルダ選択 ／ フォルダ・ファイルをドロップ</div>
         <div style="font-size:0.72rem;color:var(--gray-400);margin-top:0.3rem">フォルダ内のZIPを展開し、Excelをキーワードで自動仕分けします</div>
+        <div style="font-size:0.7rem;color:var(--gray-400);margin-top:0.2rem">対応ブラウザではアップロード元フォルダに直接保存します</div>
       </div>
 
       <!-- 仕分けルール表示 -->

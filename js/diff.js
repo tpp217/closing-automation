@@ -86,10 +86,46 @@ function checkDiff(currentContractors, prevContractors) {
         personKey: key,
         type: 'BASIC_PAY_CHANGE',
         severity: 'alert',
-        label: '基本給変更（要確認）',
+        label: delta > 0 ? '昇給（基本給アップ）' : '基本給変更（要確認）',
         before: `${prevBasic}万円`,
         after:  `${currBasic}万円`,
         details: `差分: ${delta > 0 ? '+' : ''}${delta}万円（${delta > 0 ? '+' : ''}${deltaYen.toLocaleString()}円）`,
+        isManualApproved: false
+      });
+    }
+
+    // ── 昇給希望額チェック ──
+    const currRaise = Number(c.raiseRequestMan ?? 0);
+    const prevRaise = Number(prev.raiseRequestMan ?? 0);
+    if (currRaise !== prevRaise) {
+      const delta = currRaise - prevRaise;
+      results.push({
+        name: c.name,
+        personKey: key,
+        type: 'RAISE_REQUEST_CHANGE',
+        severity: 'alert',
+        label: '昇給希望額変更（要確認）',
+        before: `${prevRaise}万円`,
+        after:  `${currRaise}万円`,
+        details: `差分: ${delta > 0 ? '+' : ''}${delta}万円`,
+        isManualApproved: false
+      });
+    }
+
+    // ── 大入りチェック ──
+    const currOiri = Number(c.oiriMan ?? 0);
+    const prevOiri = Number(prev.oiriMan ?? 0);
+    if (currOiri !== prevOiri) {
+      const delta = currOiri - prevOiri;
+      results.push({
+        name: c.name,
+        personKey: key,
+        type: 'OIRI_CHANGE',
+        severity: 'alert',
+        label: '大入り変更（要確認）',
+        before: `${prevOiri}万円`,
+        after:  `${currOiri}万円`,
+        details: `差分: ${delta > 0 ? '+' : ''}${delta}万円`,
         isManualApproved: false
       });
     }

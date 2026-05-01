@@ -594,8 +594,10 @@ function extractReportSummary(ws) {
   const salesReport  = findSectionContent(/報告事項[・・]当月の売上/);
   const challenges   = findSectionContent(/課題[・・]対策[・・]目標/);
   const miscReport   = findSectionContent(/^報告事項$/);
+  const result       = findSectionContent(/^結果|結果[・・]|^成果/);
+  const staffShift   = findSectionContent(/スタッフシフト|^シフト/);
 
-  return { area, reporter, salesReport, challenges, miscReport };
+  return { area, reporter, salesReport, challenges, miscReport, result, staffShift };
 }
 
 /**
