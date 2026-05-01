@@ -855,6 +855,8 @@ async function renderReportSummary() {
       setBody('summary-sales-report-body', reportSummary.salesReport);
       setBody('summary-challenges-body',   reportSummary.challenges);
       setBody('summary-misc-report-body',  reportSummary.miscReport);
+      setBody('summary-result-body',       reportSummary.result);
+      setBody('summary-shift-body',        reportSummary.staffShift);
     }
 
     // スタッフ今後の課題
@@ -940,6 +942,8 @@ async function saveReportSummaryToDB({ reportSummary, staffChallenges, dateSheet
       salesReport:     reportSummary?.salesReport    ?? '',
       challenges:      reportSummary?.challenges     ?? '',
       miscReport:      reportSummary?.miscReport     ?? '',
+      result:          reportSummary?.result         ?? '',
+      staffShift:      reportSummary?.staffShift     ?? '',
       staffChallenges: staffChallenges ?? []
     });
 
@@ -1397,12 +1401,11 @@ async function loadSnapshotList() {
         chip.title = `${periodLabel} / ${storeName} — クリックして詳細表示`;
         chip.addEventListener('click', (e) => {
           e.stopPropagation();
-          // 選択モード中はチェック切り替え
-          if (chipWrap.querySelector('.snapshot-select-checkbox')) {
-            const cb = chipWrap.querySelector('.snapshot-select-checkbox');
+          // 選択モード中はチェック切り替え（change イベント経由で削除ボタン状態も更新）
+          const cb = chipWrap.querySelector('.snapshot-select-checkbox');
+          if (cb) {
             cb.checked = !cb.checked;
-            chipWrap.classList.toggle('selected', cb.checked);
-            updateDeleteBtn();
+            cb.dispatchEvent(new Event('change'));
             return;
           }
           openSnapshotModal(storeName, periodYm, periodLabel);
@@ -1793,7 +1796,18 @@ function renderSnapDiffTab(currentRows, prevRows, prevYm, currentDrRows, prevDrR
     }
     // 基本給
     if (Number(r.basic_pay_man) !== Number(prev.basic_pay_man)) {
-      diffs.push({ name: r.person_name, label: '基本給変更', before: `${prev.basic_pay_man}万円`, after: `${r.basic_pay_man}万円`, severity: 'alert' });
+      const isUp = Number(r.basic_pay_man) > Number(prev.basic_pay_man);
+      diffs.push({ name: r.person_name, label: isUp ? '昇給（基本給アップ）' : '基本給変更', before: `${prev.basic_pay_man}万円`, after: `${r.basic_pay_man}万円`, severity: 'alert' });
+      hasChange = true;
+    }
+    // 昇給希望額
+    if (Number(r.raise_request_man ?? 0) !== Number(prev.raise_request_man ?? 0)) {
+      diffs.push({ name: r.person_name, label: '昇給希望額変更', before: `${prev.raise_request_man ?? 0}万円`, after: `${r.raise_request_man ?? 0}万円`, severity: 'alert' });
+      hasChange = true;
+    }
+    // 大入り
+    if (Number(r.oiri_man ?? 0) !== Number(prev.oiri_man ?? 0)) {
+      diffs.push({ name: r.person_name, label: '大入り変更', before: `${prev.oiri_man ?? 0}万円`, after: `${r.oiri_man ?? 0}万円`, severity: 'alert' });
       hasChange = true;
     }
     // 振込先（銀行名・支店名・口座種別・口座番号・名義カナ）
@@ -2235,7 +2249,10 @@ const ORGANIZER_RULES = [
 // → generateAsync後に空フォルダとして追加する方法を使用
 const ORGANIZER_EMPTY_FOLDERS = ['業務報告書', '各種統計', '店舗データ', '内勤請求', '内勤請求/DR請求書'];
 
-let _organizerAllFiles = []; // フォルダ選択で取得した全Fileオブジェクト
+let _organizerAllFiles = [];      // 全Fileオブジェクト
+let _organizerDirHandle = null;   // 書き戻し可能なFile System Access ディレクトリハンドル
+let _organizerPeriodLabel = '';   // 検出した「YYYY.M」文字列（ファイル名用）
+let _organizerSourceFolderName = ''; // 表示用：アップロード元フォルダ名
 
 function initOrganizerModal() {
   const openBtn   = $('btn-folder-organizer');
@@ -2256,15 +2273,121 @@ function initOrganizerModal() {
   cancelBtn.addEventListener('click', () => { resetOrganizerModal(); });
   modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
 
-  dropZone.addEventListener('click', () => fileInput.click());
+  // クリック → File System Access API があれば showDirectoryPicker、なければ webkitdirectory
+  dropZone.addEventListener('click', async () => {
+    if ('showDirectoryPicker' in window) {
+      try {
+        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        await handleOrganizerDirectoryHandle(handle);
+      } catch (e) {
+        if (e.name !== 'AbortError') {
+          console.warn('showDirectoryPicker failed:', e);
+          fileInput.click(); // フォールバック
+        }
+      }
+    } else {
+      fileInput.click();
+    }
+  });
   fileInput.addEventListener('change', e => handleOrganizerFolder(Array.from(e.target.files)));
+
+  // ── ドラッグ＆ドロップ ──
+  dropZone.addEventListener('dragenter', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.style.borderColor = 'var(--primary)';
+  });
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  dropZone.addEventListener('dragleave', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.style.borderColor = '';
+  });
+  dropZone.addEventListener('drop', async e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.style.borderColor = '';
+    const files = await readDroppedItems(e.dataTransfer);
+    if (files.length > 0) handleOrganizerFolder(files);
+  });
 
   runBtn.addEventListener('click', runOrganizerProcess);
 }
 
+// DataTransfer から再帰的にファイルを取得（フォルダドロップ対応）
+async function readDroppedItems(dataTransfer) {
+  const files = [];
+  const items = Array.from(dataTransfer.items || []);
+  if (items.length && items[0].webkitGetAsEntry) {
+    const entries = items.map(it => it.webkitGetAsEntry()).filter(Boolean);
+    for (const entry of entries) {
+      await walkEntry(entry, '', files);
+    }
+  } else {
+    // フォールバック：単純なファイルドロップ
+    for (const f of dataTransfer.files) files.push(f);
+  }
+  return files;
+}
+
+async function walkEntry(entry, pathPrefix, files) {
+  if (entry.isFile) {
+    const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+    // webkitRelativePath は読み取り専用なので、独自プロパティで保持
+    try {
+      Object.defineProperty(file, '_relativePath', { value: pathPrefix + entry.name });
+    } catch (_) { /* ignore */ }
+    files.push(file);
+  } else if (entry.isDirectory) {
+    const reader = entry.createReader();
+    const children = await new Promise((resolve, reject) => {
+      const all = [];
+      const readBatch = () => reader.readEntries(es => {
+        if (es.length === 0) resolve(all);
+        else { all.push(...es); readBatch(); }
+      }, reject);
+      readBatch();
+    });
+    for (const child of children) {
+      await walkEntry(child, pathPrefix + entry.name + '/', files);
+    }
+  }
+}
+
+// File System Access の DirectoryHandle からファイルを読み込み（書き戻し可能）
+async function handleOrganizerDirectoryHandle(dirHandle) {
+  _organizerDirHandle = dirHandle;
+  _organizerSourceFolderName = dirHandle.name || '';
+  const files = [];
+  await walkDirHandle(dirHandle, '', files);
+  handleOrganizerFolder(files);
+}
+
+async function walkDirHandle(dirHandle, pathPrefix, files) {
+  for await (const [name, child] of dirHandle.entries()) {
+    if (child.kind === 'file') {
+      const file = await child.getFile();
+      try {
+        Object.defineProperty(file, '_relativePath', { value: pathPrefix + name });
+      } catch (_) { /* ignore */ }
+      files.push(file);
+    } else if (child.kind === 'directory') {
+      await walkDirHandle(child, pathPrefix + name + '/', files);
+    }
+  }
+}
+
 function resetOrganizerModal() {
   _organizerAllFiles = [];
+  _organizerDirHandle = null;
+  _organizerPeriodLabel = '';
+  _organizerSourceFolderName = '';
   $('organizer-drop-zone').style.display  = 'block';
+  $('organizer-drop-zone').style.borderColor = '';
   $('organizer-file-list').style.display  = 'none';
   $('organizer-progress').style.display   = 'none';
   $('organizer-actions').style.display    = 'none';
@@ -2273,6 +2396,27 @@ function resetOrganizerModal() {
   $('organizer-progress-log').innerHTML   = '';
   $('organizer-file-input').value         = '';
   $('btn-organizer-run').disabled         = true;
+}
+
+// ファイル名・パスから「YYYY.M」または「YYYY.MM」を検出
+function detectPeriodLabelFromFiles(files) {
+  const re = /(20\d{2})[\.\-_／/](\d{1,2})/;
+  for (const f of files) {
+    const candidates = [
+      f._relativePath,
+      f.webkitRelativePath,
+      f.name
+    ].filter(Boolean);
+    for (const s of candidates) {
+      const m = String(s).match(re);
+      if (m) {
+        const y = m[1];
+        const mo = String(parseInt(m[2], 10)); // ゼロパディングなし
+        return `${y}.${mo}`;
+      }
+    }
+  }
+  return '';
 }
 
 function handleOrganizerFolder(files) {
@@ -2287,14 +2431,34 @@ function handleOrganizerFolder(files) {
     return;
   }
 
+  // フォルダ名（webkitRelativePath / _relativePath の先頭セグメント）を取得
+  if (!_organizerSourceFolderName) {
+    const sample = files.find(f => (f.webkitRelativePath || f._relativePath));
+    if (sample) {
+      const p = sample.webkitRelativePath || sample._relativePath;
+      _organizerSourceFolderName = p.split('/')[0] || '';
+    }
+  }
+
+  // 期間ラベル（YYYY.M）をファイル名・パス・フォルダ名から検出
+  _organizerPeriodLabel = detectPeriodLabelFromFiles(files) ||
+    (_organizerSourceFolderName.match(/(20\d{2})[\.\-_／/](\d{1,2})/)
+      ? `${RegExp.$1}.${parseInt(RegExp.$2,10)}` : '');
+
   // ZIP数・Excel数を集計して表示
   const zips   = _organizerAllFiles.filter(f => f.name.toLowerCase().endsWith('.zip'));
   const excels = _organizerAllFiles.filter(f => !f.name.toLowerCase().endsWith('.zip'));
 
   // サマリー行
   const summaryRows = [];
+  if (_organizerSourceFolderName) summaryRows.push(`<tr><td style="padding:4px 8px">📁 アップロード元</td><td style="padding:4px 8px">${escapeHtml(_organizerSourceFolderName)}</td></tr>`);
+  if (_organizerPeriodLabel)      summaryRows.push(`<tr><td style="padding:4px 8px">🗓️ 検出した年月</td><td style="padding:4px 8px">${escapeHtml(_organizerPeriodLabel)}</td></tr>`);
   if (zips.length > 0)   summaryRows.push(`<tr><td style="padding:4px 8px">🗜️ ZIPファイル</td><td style="padding:4px 8px">${zips.length} 件（展開して仕分け）</td></tr>`);
   if (excels.length > 0) summaryRows.push(`<tr><td style="padding:4px 8px">📊 Excelファイル</td><td style="padding:4px 8px">${excels.length} 件（直接仕分け）</td></tr>`);
+
+  const saveDest = _organizerDirHandle
+    ? `${escapeHtml(_organizerSourceFolderName || 'アップロード元フォルダ')}/ に直接保存`
+    : 'ダウンロードフォルダに保存（ブラウザの仕様）';
 
   $('organizer-file-table').innerHTML = `
     <div style="font-size:0.78rem;margin-bottom:0.5rem;color:var(--text-secondary)">
@@ -2305,6 +2469,9 @@ function handleOrganizerFolder(files) {
     </table>
     <div style="margin-top:0.6rem;font-size:0.72rem;color:var(--gray-400)">
       仕分けルール: 業務報告書 / 各種統計 / 店舗データ → 各フォルダへコピー｜DR請求書 → 空フォルダ作成
+    </div>
+    <div style="margin-top:0.4rem;font-size:0.72rem;color:var(--text-muted)">
+      <i class="fas fa-save"></i> 保存先: ${saveDest}
     </div>`;
 
   $('organizer-drop-zone').style.display  = 'none';
@@ -2406,20 +2573,48 @@ async function runOrganizerProcess() {
   barEl.style.width = '100%';
   log('✅ 完了！');
 
-  const today   = new Date();
-  const dateStr = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-  const a = document.createElement('a');
-  a.href     = URL.createObjectURL(blob);
-  a.download = `整理済み締め書類_${dateStr}.zip`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  // ファイル名: 「整理済み締め書類YYYY.M」（検出失敗時は今日の年月）
+  let periodLabel = _organizerPeriodLabel;
+  if (!periodLabel) {
+    const today = new Date();
+    periodLabel = `${today.getFullYear()}.${today.getMonth() + 1}`;
+  }
+  const fileName = `整理済み締め書類${periodLabel}.zip`;
 
-  showToast('「整理済み締め書類」のダウンロードを開始しました', 'success');
+  // 保存先: showDirectoryPicker で取得済みなら同フォルダに直接保存、なければダウンロード
+  let savedTo = '';
+  if (_organizerDirHandle) {
+    try {
+      const fileHandle = await _organizerDirHandle.getFileHandle(fileName, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      savedTo = `${_organizerSourceFolderName || ''}/${fileName}`;
+      log(`💾 保存しました: ${escapeHtml(savedTo)}`);
+    } catch (e) {
+      log(`⚠️ アップロード元への保存に失敗。ダウンロードに切り替えます: ${escapeHtml(e.message)}`);
+      triggerBlobDownload(blob, fileName);
+      savedTo = `ダウンロード/${fileName}`;
+    }
+  } else {
+    triggerBlobDownload(blob, fileName);
+    savedTo = `ダウンロード/${fileName}`;
+  }
+
+  showToast(`「${fileName}」を保存しました`, 'success');
 
   setTimeout(() => {
     $('organizer-modal').style.display = 'none';
     resetOrganizerModal();
   }, 2000);
+}
+
+function triggerBlobDownload(blob, fileName) {
+  const a = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function getOrganizerDest(filename) {
