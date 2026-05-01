@@ -570,18 +570,23 @@ function extractReportSummary(ws) {
   const reporter = normText(String(getCellValue(ws, 4, 12) ?? '')); // M5
 
   // ラベルを検索して次の行の値を取得するユーティリティ
-  function findSectionContent(labelPattern, contentCol = 0) {
+  // labelCol を指定しない場合は A〜D列（0〜3）を順にスキャン
+  function findSectionContent(labelPattern, opts = {}) {
+    const labelCols   = opts.labelCols   ?? [0, 1, 2, 3];
+    const contentCol  = opts.contentCol;       // 未指定なら見つかったラベルの同じ列
+    const maxLabelLen = opts.maxLabelLen ?? 40;
     for (let r = 0; r <= maxRow; r++) {
-      const v = normText(String(getCellValue(ws, r, 0) ?? ''));
-      if (labelPattern.test(v)) {
-        // 次の行から内容を取得（空行をスキップしながら最初の非空セルを結合）
+      for (const lc of labelCols) {
+        const v = normText(String(getCellValue(ws, r, lc) ?? ''));
+        if (!v || v.length > maxLabelLen) continue;
+        if (!labelPattern.test(v)) continue;
+        const cc = contentCol ?? lc;
         const lines = [];
         for (let rr = r + 1; rr <= Math.min(r + 15, maxRow); rr++) {
-          const cellVal = getCellValue(ws, rr, contentCol);
+          const cellVal = getCellValue(ws, rr, cc);
           if (cellVal !== null && cellVal !== undefined && String(cellVal).trim()) {
             lines.push(String(cellVal).trim());
           } else if (lines.length > 0) {
-            // 一度内容が始まったら空行で終了
             break;
           }
         }
@@ -594,8 +599,20 @@ function extractReportSummary(ws) {
   const salesReport  = findSectionContent(/報告事項[・・]当月の売上/);
   const challenges   = findSectionContent(/課題[・・]対策[・・]目標/);
   const miscReport   = findSectionContent(/^報告事項$/);
-  const result       = findSectionContent(/^結果|結果[・・]|^成果/);
-  const staffShift   = findSectionContent(/スタッフシフト|^シフト/);
+  const result       = findSectionContent(/結果|成果|業績/);
+  const staffShift   = findSectionContent(/スタッフシフト|シフト|勤務.*表|出勤.*表/);
+
+  // デバッグ: ラベルが取れなかった項目があれば、A〜D列の全短文ラベルをコンソール出力
+  if (!result || !staffShift) {
+    const allLabels = [];
+    for (let r = 0; r <= maxRow; r++) {
+      for (let c = 0; c <= 3; c++) {
+        const v = normText(String(getCellValue(ws, r, c) ?? ''));
+        if (v && v.length <= 30) allLabels.push(`R${r+1}C${String.fromCharCode(65+c)}: ${v}`);
+      }
+    }
+    console.warn('[reportSummary] 結果またはスタッフシフトのラベルが見つかりません。シート内のラベル一覧（参考）:', allLabels);
+  }
 
   return { area, reporter, salesReport, challenges, miscReport, result, staffShift };
 }
