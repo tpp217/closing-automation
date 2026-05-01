@@ -129,33 +129,65 @@ function showFileInfo(elementId, name, size) {
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem">
       <div>
-        <div class="file-name"><i class="fas fa-file-excel"></i> ${name}</div>
+        <div class="file-name"><i class="fas fa-file-excel"></i> ${escapeHtml(name)}</div>
         <div style="font-size:0.8rem;color:var(--gray-400);margin-top:2px">${(size / 1024).toFixed(1)} KB</div>
       </div>
-      <button onclick="clearFile('${fileKey}')" title="削除" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:0.72rem;padding:0;text-decoration:underline;text-underline-offset:2px;opacity:0.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'" aria-label="ファイルを削除">削除</button>
+      <button type="button" data-clear-file="${fileKey}" title="削除" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:0.72rem;padding:0;text-decoration:underline;text-underline-offset:2px;opacity:0.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'" aria-label="ファイルを削除">削除</button>
     </div>`;
+  // インライン onclick はスコープ依存で取りこぼしが起きるため addEventListener で確実にバインド
+  const btn = el.querySelector('[data-clear-file]');
+  if (btn) btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearFile(btn.dataset.clearFile);
+  });
   show(el);
 }
 
 function clearFile(fileKey) {
-  const infoId = { report: 'report-file-info', monthly: 'monthly-file-info', dr: 'dr-file-info' }[fileKey];
-  const inputId = { report: 'input-report', monthly: 'input-monthly', dr: 'input-dr' }[fileKey];
+  const infoId  = { report: 'report-file-info', monthly: 'monthly-file-info', dr: 'dr-file-info' }[fileKey];
+  const inputId = { report: 'input-report',     monthly: 'input-monthly',     dr: 'input-dr'     }[fileKey];
   if (!infoId) return;
-  // AppState をクリア
+
+  // AppState をクリア（ファイル本体・バッファ）
   if (fileKey === 'report')  { AppState.reportFile  = null; AppState.reportBuffer  = null; }
   if (fileKey === 'monthly') { AppState.monthlyFile = null; AppState.monthlyBuffer = null; }
   if (fileKey === 'dr')      { AppState.drFile      = null; AppState.drBuffer      = null; }
-  // ファイル情報エリアを非表示
-  const el = $(infoId);
-  if (el) { el.innerHTML = ''; hide(el); }
-  // input をリセット
-  const inp = $(inputId);
-  if (inp) inp.value = '';
-  // DR削除時は検出エリアのDR行も非表示
+
+  // 派生状態もリセット（report/monthly が消えたら自動検出済みの店舗・年月、解析済みデータも捨てる）
+  if (fileKey === 'report' || fileKey === 'monthly') {
+    AppState.storeName        = '';
+    AppState.periodYm         = '';
+    AppState.allPeople        = [];
+    AppState.contractors      = [];
+    AppState.parseWarnings    = [];
+    AppState.dailyPayEntries  = [];
+    AppState.reconcileResults = [];
+    AppState.diffResults      = [];
+    AppState.prevContractors  = [];
+    // 検出表示もクリア
+    const ds = $('detected-store');  if (ds) ds.textContent = '-';
+    const dp = $('detected-period'); if (dp) dp.textContent = '-';
+    if (!AppState.reportFile && !AppState.monthlyFile) {
+      hide($('detected-info'));
+    }
+  }
   if (fileKey === 'dr') {
+    AppState.drList            = [];
+    AppState.drReconcileResults = [];
+    AppState.prevDrList        = [];
+    AppState.drDiffResults     = [];
     const drItem = $('detected-dr-item');
     if (drItem) drItem.style.display = 'none';
   }
+
+  // ファイル情報エリアを非表示
+  const el = $(infoId);
+  if (el) { el.innerHTML = ''; hide(el); }
+  // input をリセット（同じファイルを再アップロードしてもchangeが発火するように）
+  const inp = $(inputId);
+  if (inp) inp.value = '';
+
   updateStep1UI();
   showToast('ファイルを削除しました', 'info');
 }
