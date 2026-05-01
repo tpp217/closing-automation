@@ -2116,11 +2116,15 @@ function renderBulkTable(sets, ignoredCount) {
       const dOk = s.dr      ? `<span class="badge badge-info" title="${escapeHtml(s.dr.name)}">✓ あり</span>`    : '<span class="badge badge-gray">なし</span>';
       const canRun = s.report && s.monthly;
       const key = `${s.storeName}__${s.periodYm}`;
+      const deleteBtn = `<button onclick="deleteBulkStore('${escapeHtml(key)}')" title="この店舗を削除" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:0.72rem;padding:0;text-decoration:underline;text-underline-offset:2px;opacity:0.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'" aria-label="削除">削除</button>`;
       const statusCell = canRun
-        ? '<span class="badge badge-ok">処理可</span>'
+        ? `<span style="display:inline-flex;align-items:center;gap:0.6rem">
+             <span class="badge badge-ok">処理可</span>
+             ${deleteBtn}
+           </span>`
         : `<span style="display:inline-flex;align-items:center;gap:0.6rem">
              <span class="badge badge-warn"><i class="fas fa-forward"></i> スキップ</span>
-             <button onclick="deleteBulkStore('${escapeHtml(key)}')" title="この店舗を削除" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:0.72rem;padding:0;text-decoration:underline;text-underline-offset:2px;opacity:0.8" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'" aria-label="削除">削除</button>
+             ${deleteBtn}
            </span>`;
       return `<tr data-bulk-key="${escapeHtml(key)}" style="${canRun ? '' : 'opacity:.5'}">
         <td style="padding:4px 8px;font-weight:700">${escapeHtml(s.storeName)}</td>
@@ -2262,6 +2266,7 @@ function initOrganizerModal() {
   const fileInput = $('organizer-file-input');
   const runBtn    = $('btn-organizer-run');
   const cancelBtn = $('btn-organizer-cancel');
+  const reselectBtn = $('btn-organizer-reselect');
 
   if (!openBtn) return;
 
@@ -2269,9 +2274,11 @@ function initOrganizerModal() {
     resetOrganizerModal();
     modal.style.display = 'flex';
   });
-  closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+  closeBtn.addEventListener('click', () => { modal.style.display = 'none'; resetOrganizerModal(); });
   cancelBtn.addEventListener('click', () => { resetOrganizerModal(); });
-  modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+  // やり直す: 選択済みの内部状態を完全に破棄してドロップゾーンを再表示
+  if (reselectBtn) reselectBtn.addEventListener('click', () => { resetOrganizerModal(); });
+  modal.addEventListener('click', e => { if (e.target === modal) { modal.style.display = 'none'; resetOrganizerModal(); } });
 
   // クリック → File System Access API があれば showDirectoryPicker、なければ webkitdirectory
   dropZone.addEventListener('click', async () => {

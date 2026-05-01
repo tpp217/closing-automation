@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=202605010001">
+  <link rel="stylesheet" href="css/style.css?v=202605010002">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
@@ -462,16 +462,16 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="js/utils.js?v=202605010001"></script>
-  <script src="js/config.js?v=202605010001"></script>
-  <script src="js/db.js?v=202605010001"></script>
-  <script src="js/parser-report.js?v=202605010001"></script>
-  <script src="js/parser-monthly.js?v=202605010001"></script>
-  <script src="js/parser-dr.js?v=202605010001"></script>
-  <script src="js/reconcile.js?v=202605010001"></script>
-  <script src="js/diff.js?v=202605010001"></script>
-  <script src="js/output.js?v=202605010001"></script>
-  <script src="js/app.js?v=202605010001"></script>
+  <script src="js/utils.js?v=202605010002"></script>
+  <script src="js/config.js?v=202605010002"></script>
+  <script src="js/db.js?v=202605010002"></script>
+  <script src="js/parser-report.js?v=202605010002"></script>
+  <script src="js/parser-monthly.js?v=202605010002"></script>
+  <script src="js/parser-dr.js?v=202605010002"></script>
+  <script src="js/reconcile.js?v=202605010002"></script>
+  <script src="js/diff.js?v=202605010002"></script>
+  <script src="js/output.js?v=202605010002"></script>
+  <script src="js/app.js?v=202605010002"></script>
   <script>
     // サイバーパンク時計
     function updateClock() {
@@ -533,7 +533,10 @@
       </div>
 
       <!-- アクションボタン -->
-      <div id="organizer-actions" style="display:none;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap">
+      <div id="organizer-actions" style="display:none;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;align-items:center">
+        <button id="btn-organizer-reselect" class="btn btn-outline" title="選択を破棄してやり直す">
+          <i class="fas fa-redo"></i> 選択をやり直す
+        </button>
         <button id="btn-organizer-cancel" class="btn btn-outline">キャンセル</button>
         <button id="btn-organizer-run" class="btn btn-primary" disabled>
           <i class="fas fa-play"></i> 整理して「整理済み締め書類」をダウンロード
