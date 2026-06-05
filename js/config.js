@@ -1,8 +1,6 @@
 /**
  * config.js - アプリ設定
  *
- * Supabase接続情報
+ * Supabase へはサーバー（Vercel Functions / service_role）経由でアクセスするため、
+ * クライアントに接続情報・キーは持たせない（旧版の匿名キー直書きは撤去）。
  */
-
-window.SUPABASE_URL = 'https://urzflutzgcioqswzmpkz.supabase.co';
-window.SUPABASE_ANON_KEY = 'sb_publishable_3fF8jMVhVyQG5iaSpnnJwQ_wBsY0dp3';
