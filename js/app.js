@@ -1368,7 +1368,7 @@ async function loadSnapshotList() {
   listEl.innerHTML = '<div class="snapshot-empty"><i class="fas fa-spinner fa-spin"></i> 読み込み中...</div>';
 
   try {
-    // IndexedDB から両テーブルを取得
+    // Supabase から両テーブルを取得
     const { staffRows, drRows } = await getAllSnapshotRows();
 
     // 年月単位でグループ化
@@ -1496,7 +1496,7 @@ async function openSnapshotModal(storeName, periodYm, periodLabel) {
   overlay.style.display = 'flex';
 
   try {
-    // IndexedDB から該当レコード取得
+    // Supabase から該当レコード取得
     const { staffRows: allStaff, drRows: allDR } = await getAllSnapshotRows();
     const allRows = allStaff.filter(r => r.store_name === storeName && r.period_ym === periodYm);
     const drRows  = allDR.filter(r => r.store_name === storeName && r.period_ym === periodYm);
