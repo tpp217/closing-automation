@@ -1,5 +1,8 @@
 {
   "private": true,
   "type": "module",
-  "description": "CLOSING AUTO — 静的サイト + Vercel Functions（依存なし・グローバル fetch のみ使用）"
+  "description": "CLOSING AUTO — 静的サイト + Vercel Functions（jose のみ依存：workspace-hub JWT の JWKS 検証用）",
+  "dependencies": {
+    "jose": "^5.9.6"
+  }
 }
