@@ -18,7 +18,9 @@
  *     一致しないと enforce 時に 403 で全業務 API が落ちる。
  *
  * 環境変数:
- *   - JWKS_URL        JWKS エンドポイント（既定 https://auth.utinc.dev/.well-known/jwks.json）
+ *   - JWKS_URL            JWKS エンドポイント（既定 https://auth.utinc.dev/.well-known/jwks.json）
+ *   - AUTH_EXPECTED_ISSUER 期待する発行者 iss（既定 https://auth.utinc.dev）。
+ *                         署名検証に加えて iss 照合を行い、別 issuer のなりすましを弾く。
  *   - AUTH_ENFORCE    "on" でブロック有効化。それ以外（未設定含む）は監視のみ
  *   - AUTH_SYSTEM_KEY 自アプリのシステムキー（既定 "closing"）。
  *                     enforce 時、JWT の systems[] にこのキーが含まれるかを検証。
@@ -28,6 +30,13 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const DEFAULT_JWKS_URL = 'https://auth.utinc.dev/.well-known/jwks.json';
 const DEFAULT_SYSTEM_KEY = 'closing';
+// workspace-hub の JWT は iss = "https://auth.utinc.dev" 固定。なりすまし二重防御として照合する。
+const DEFAULT_ISSUER = 'https://auth.utinc.dev';
+
+/** 期待する発行者（iss）。既定値で運用するため通常は環境変数の設定不要。 */
+function expectedIssuer() {
+  return process.env.AUTH_EXPECTED_ISSUER || DEFAULT_ISSUER;
+}
 
 /** enforce が有効か（"on" のときだけ true） */
 export function isEnforcing() {
@@ -63,7 +72,7 @@ function extractBearer(authHeader) {
  */
 async function verifyToken(token) {
   try {
-    const { payload } = await jwtVerify(token, getJWKS());
+    const { payload } = await jwtVerify(token, getJWKS(), { issuer: expectedIssuer() });
     return {
       ok: true,
       claims: {
