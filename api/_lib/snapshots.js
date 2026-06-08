@@ -1,8 +1,20 @@
 // contractor_snapshots / dr_snapshots 共通の認証付き CRUD。
 // クエリ/操作は店舗・年月の限定フィルタのみ（任意 SQL は受け付けない）。
+// この共通ハンドラは snapshots.js / dr-snapshots.js の両 api/*.js から呼ばれるため、
+// JWT 認証ゲートをここに一度だけ置けば両エンドポイントの先頭をカバーできる。
 import { sbFetch, eq, requireAuth } from './util.js';
+import { evaluateAuth, sendBlock } from './auth-gate.js';
 
 export async function handleSnapshotTable(req, res, table) {
+  // workspace-hub JWT 認証ゲート（既定は監視のみ・非破壊 / AUTH_ENFORCE=on でブロック）。
+  // 既存の LINE SSO セッション（requireAuth）とは独立・併存。
+  const gate = await evaluateAuth({
+    authHeader: req.headers.authorization,
+    method: req.method,
+    path: `/api/${table === 'dr_snapshots' ? 'dr-snapshots' : 'snapshots'}`,
+  });
+  if (!gate.allowed) return sendBlock(res, gate);
+
   if (!requireAuth(req, res)) return;
   try {
     if (req.method === 'GET') {

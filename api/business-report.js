@@ -1,9 +1,19 @@
 // 業務報告データ（business_reports）API。store_name+period_ym で upsert。
 import { sbFetch, eq, requireAuth } from './_lib/util.js';
+import { evaluateAuth, sendBlock } from './_lib/auth-gate.js';
 
 const TABLE = 'business_reports';
 
 export default async function handler(req, res) {
+  // workspace-hub JWT 認証ゲート（既定は監視のみ・非破壊 / AUTH_ENFORCE=on でブロック）。
+  // 既存の LINE SSO セッション（requireAuth）とは独立・併存。
+  const gate = await evaluateAuth({
+    authHeader: req.headers.authorization,
+    method: req.method,
+    path: '/api/business-report',
+  });
+  if (!gate.allowed) return sendBlock(res, gate);
+
   if (!requireAuth(req, res)) return;
   try {
     if (req.method === 'GET') {
