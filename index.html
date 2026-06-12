@@ -13,7 +13,7 @@
     // 認証ゲート: 未ログインなら LINE ログインへ即リダイレクト
     (function () {
       fetch('/api/auth/me', { credentials: 'same-origin' })
-        .then(function (r) { if (!r.ok) location.replace('/api/auth/line/login'); })
+        .then(function (r) { if (!r.ok) location.replace('/api/auth/login'); })
         .catch(function () { /* ネットワーク失敗時は操作時の API 401 で再判定 */ });
     })();
   </script>
