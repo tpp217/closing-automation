@@ -63,7 +63,7 @@ export default async function handler(req, res) {
   if (!verified.claims.systems.includes(SYSTEM_KEY)) return fail('system_forbidden');
 
   // ── アプリ層セッション（自前セッション）も発行 ──
-  // 【フェーズ3・2026-06-12】許可リスト(ALLOWED_LINE_USER_IDS)ではなく workspace の契約
+  // 【フェーズ3・2026-06-12】workspace の契約
   // （wh JWT の systems[] に自システムが含まれること＝上で検証済み）を正本にする＝二重管理の解消。
   // systems[] を通ったブラウザにはそのまま自前セッションを発行する（ランチャーから開けば即ログイン）。
   // 本人識別子は line_user_id（無ければ sub=operator_id）。
