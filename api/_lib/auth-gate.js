@@ -94,6 +94,7 @@ export async function verifyToken(token) {
         capabilities: Array.isArray(payload.capabilities) ? payload.capabilities : [],
         systems:      Array.isArray(payload.systems) ? payload.systems : [],
         sub:          payload.sub ?? null,
+        line_user_id: payload.line_user_id ?? null,
       },
     };
   } catch (e) {
