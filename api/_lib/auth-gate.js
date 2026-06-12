@@ -59,6 +59,19 @@ function getJWKS() {
 }
 
 /** Authorization: Bearer <token> からトークンを取り出す（無ければ null） */
+/** Cookie ヘッダから wh_token を取り出す（無ければ null）。SSO callback が張る HttpOnly cookie。 */
+function extractWhTokenCookie(cookieHeader) {
+  if (!cookieHeader || typeof cookieHeader !== 'string') return null;
+  for (const part of cookieHeader.split(';')) {
+    const [name, ...rest] = part.trim().split('=');
+    if (name === 'wh_token' && rest.length > 0) {
+      const v = rest.join('=').trim();
+      if (v.length > 0) return v;
+    }
+  }
+  return null;
+}
+
 function extractBearer(authHeader) {
   if (!authHeader || typeof authHeader !== 'string') return null;
   const m = authHeader.match(/^Bearer\s+(.+)$/i);
@@ -70,7 +83,7 @@ function extractBearer(authHeader) {
  * 成功: { ok:true, claims:{ tenant_id, level, capabilities, systems } }
  * 失敗: { ok:false, reason }
  */
-async function verifyToken(token) {
+export async function verifyToken(token) {
   try {
     const { payload } = await jwtVerify(token, getJWKS(), { issuer: expectedIssuer() });
     return {
@@ -99,9 +112,10 @@ async function verifyToken(token) {
  *   - allowed:true  → 通す（監視モードでは常にこちら。enforce 時も検証成功ならこちら）
  *   - allowed:false → 呼び出し側で status/body を返してブロック（enforce 時のみ発生）
  */
-export async function evaluateAuth({ authHeader, method = '', path = '' } = {}) {
+export async function evaluateAuth({ authHeader, cookieHeader, method = '', path = '' } = {}) {
   const enforce = isEnforcing();
-  const token = extractBearer(authHeader);
+  // ヘッダ優先・無ければ SSO ログイン済みブラウザの wh_token cookie（フロント変更不要で認証が通る）。
+  const token = extractBearer(authHeader) ?? extractWhTokenCookie(cookieHeader);
   const tag = `[auth-gate]${enforce ? '[ENFORCE]' : '[monitor]'} ${method} ${path}`;
 
   // トークン無し

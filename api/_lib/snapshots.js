@@ -10,6 +10,7 @@ export async function handleSnapshotTable(req, res, table) {
   // 既存の LINE SSO セッション（requireAuth）とは独立・併存。
   const gate = await evaluateAuth({
     authHeader: req.headers.authorization,
+    cookieHeader: req.headers.cookie,
     method: req.method,
     path: `/api/${table === 'dr_snapshots' ? 'dr-snapshots' : 'snapshots'}`,
   });
