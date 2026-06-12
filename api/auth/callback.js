@@ -5,6 +5,7 @@
 // cookie が自動で載り、API の認証ゲート（evaluateAuth の cookie フォールバック）で
 // 検証できる＝enforce 解禁の前提。検証に通らない限り cookie は一切張らない。
 import { verifyToken } from '../_lib/auth-gate.js';
+import { issueSession, setCookie, SESSION_COOKIE } from '../_lib/util.js';
 
 const AUTH_ORIGIN = process.env.AUTH_EXPECTED_ISSUER || 'https://auth.utinc.dev';
 const SYSTEM_KEY = process.env.AUTH_SYSTEM_KEY || 'closing';
@@ -61,9 +62,22 @@ export default async function handler(req, res) {
   if (!verified.ok) return fail('invalid_token');
   if (!verified.claims.systems.includes(SYSTEM_KEY)) return fail('system_forbidden');
 
+  // ── アプリ層セッション（自前 LINE セッション）も発行 ──
+  // wh JWT は line_user_id claim を含む（発行時に LINE / QR / メール認証済みの operator 本人）。
+  // LINE ログインと同一の許可リスト（ALLOWED_LINE_USER_IDS）を通った場合のみ、LINE callback と
+  // 同じセッション cookie を発行する＝ランチャーから開くだけでログイン完了になる。
+  // 許可リスト外（他テナントの operator 等）はゲート層 cookie のみ＝従来どおり LINE ログイン画面。
+  const lineUserId = verified.claims.line_user_id;
+  const allow = (process.env.ALLOWED_LINE_USER_IDS || '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  if (typeof lineUserId === 'string' && lineUserId.length > 0 && allow.includes(lineUserId)) {
+    const sessionToken = issueSession({ uid: lineUserId, name: '' });
+    setCookie(res, SESSION_COOKIE, sessionToken, { maxAge: 60 * 60 * 12 });
+  }
+
+  // ゲート層 cookie（wh_token）。setCookie は Set-Cookie を配列で積むため両立する。
+  setCookie(res, 'wh_token', accessToken, { maxAge: expiresIn });
   res.statusCode = 302;
-  res.setHeader('Set-Cookie',
-    `wh_token=${accessToken}; HttpOnly; Secure; SameSite=Lax; Max-Age=${expiresIn}; Path=/`);
   res.setHeader('Location', '/');
   res.end();
 }
