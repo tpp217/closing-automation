@@ -9,6 +9,7 @@ export default async function handler(req, res) {
   // 既存の LINE SSO セッション（requireAuth）とは独立・併存。
   const gate = await evaluateAuth({
     authHeader: req.headers.authorization,
+    cookieHeader: req.headers.cookie,
     method: req.method,
     path: '/api/business-report',
   });
