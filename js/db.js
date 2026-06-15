@@ -18,7 +18,17 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401) {
-    // セッション未確立・失効 → LINE ログインへ
+    // 未認証（wh_token 失効・未ログイン等）→ SSO 再ログインへ誘導。
+    // ループ防止: 直近で一度再認証を試みていれば再リダイレクトしない。
+    // （締め処理 未契約の operator 等は callback が cookie を張れず 401 が続くため、
+    //   ガード無しだと 401→login→callback→401… の無限リダイレクトになる）。
+    // 認証済みの応答が一度でも得られた時点で印を解除する（下記）。
+    let attempted = false;
+    try { attempted = !!sessionStorage.getItem('wh_sso_attempt'); } catch {}
+    if (attempted) {
+      throw new Error('認証に失敗しました（このアカウントに締め処理へのアクセス権が無い可能性があります）。ログインし直しても解消しない場合は管理者にご確認ください。');
+    }
+    try { sessionStorage.setItem('wh_sso_attempt', '1'); } catch {}
     window.location.href = '/api/auth/login';
     throw new Error('未認証のためログインへリダイレクトします');
   }
@@ -26,6 +36,8 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
     const t = await res.text().catch(() => '');
     throw new Error(`API ${res.status}: ${t.slice(0, 200)}`);
   }
+  // 認証済みで応答が得られた → 再認証の試行印を解除（次回の失効時に再ログインを許可）。
+  try { sessionStorage.removeItem('wh_sso_attempt'); } catch {}
   const t = await res.text();
   return t ? JSON.parse(t) : null;
 }
