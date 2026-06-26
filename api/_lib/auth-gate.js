@@ -95,6 +95,14 @@ export async function verifyToken(token) {
         systems:      Array.isArray(payload.systems) ? payload.systems : [],
         sub:          payload.sub ?? null,
         line_user_id: payload.line_user_id ?? null,
+        // 表示用 additive claim（workspace-hub が付与）。下流は読むだけ。
+        //   is_demo:     デモ/テスト用テナント（auth_core.tenants.is_demo）なら true。
+        //                フロントのモック/サンプル表示の出し分けヒント（認可境界ではない）。
+        //   name:        本人氏名 / tenant_name: テナント名 / department: 主所属の部署名。
+        is_demo:      typeof payload.is_demo === 'boolean' ? payload.is_demo : false,
+        name:         typeof payload.name === 'string' ? payload.name : null,
+        tenant_name:  typeof payload.tenant_name === 'string' ? payload.tenant_name : null,
+        department:   typeof payload.department === 'string' ? payload.department : null,
       },
     };
   } catch (e) {

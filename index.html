@@ -10,10 +10,44 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css?v=202605010003">
   <script>
-    // 認証ゲート: 未ログインなら LINE ログインへ即リダイレクト
+    // 認証ゲート: 未ログインなら LINE ログインへ即リダイレクト。
+    // 併せて me の本文から identity（テナント名 / 氏名 / 所属部署）を読み、ヘッダに描画する。
     (function () {
       fetch('/api/auth/me', { credentials: 'same-origin' })
-        .then(function (r) { if (!r.ok) location.replace('/api/auth/login'); })
+        .then(function (r) {
+          if (!r.ok) { location.replace('/api/auth/login'); return null; }
+          return r.json().catch(function () { return null; });
+        })
+        .then(function (me) {
+          if (!me) return;
+          // DOM 構築後に描画する（このスクリプトは <head> で走るため）。
+          function render() {
+            var box = document.getElementById('header-identity');
+            if (!box) return;
+            var parts = [];
+            if (me.tenant_name) parts.push({ cls: 'hi-tenant', text: me.tenant_name });
+            if (me.name) parts.push({ cls: 'hi-name', text: me.name });
+            if (me.department) parts.push({ cls: 'hi-dept', text: me.department });
+            box.textContent = '';
+            parts.forEach(function (p, i) {
+              if (i > 0) {
+                var sep = document.createElement('span');
+                sep.className = 'hi-sep';
+                sep.textContent = '／';
+                box.appendChild(sep);
+              }
+              var el = document.createElement('span');
+              el.className = p.cls;
+              el.textContent = p.text;
+              box.appendChild(el);
+            });
+          }
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', render);
+          } else {
+            render();
+          }
+        })
         .catch(function () { /* ネットワーク失敗時は操作時の API 401 で再判定 */ });
     })();
   </script>
@@ -41,6 +75,8 @@
           </div>
         </div>
         <div class="header-actions" style="display:flex;align-items:center;gap:12px;">
+          <!-- ログイン中の identity（テナント名／氏名／所属部署）。me() の本文から描画される。 -->
+          <span id="header-identity" style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--text-muted,#6b7280);"></span>
           <span id="header-clock"></span>
         </div>
       </div>
