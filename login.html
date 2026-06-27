@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ログイン｜締め作業自動化システム</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=202605010003">
+  <style>
+    /* ログイン画面（単体販売版専用）。既存テーマ変数を流用し、装飾は最小限。 */
+    .login-wrap {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .login-card {
+      width: 100%; max-width: 360px;
+      background: var(--surface, #fff);
+      border: 1px solid var(--border-c, #e4e8ec);
+      border-radius: var(--radius-lg, 8px);
+      box-shadow: var(--shadow-md, 0 4px 12px rgba(17,24,39,.08));
+      padding: 28px 24px;
+    }
+    .login-title {
+      font-size: 16px; font-weight: 700; margin: 0 0 4px;
+      color: var(--text, #1a1f24);
+    }
+    .login-sub {
+      font-size: 12px; color: var(--text-3, #8c96a1); margin: 0 0 20px;
+    }
+    .login-field { margin-bottom: 14px; }
+    .login-field label {
+      display: block; font-size: 12px; font-weight: 600;
+      color: var(--text-2, #5b6672); margin-bottom: 6px;
+    }
+    .login-field input {
+      width: 100%; box-sizing: border-box;
+      padding: 9px 11px; font-size: 14px;
+      font-family: var(--font-sans);
+      color: var(--text, #1a1f24);
+      background: var(--surface, #fff);
+      border: 1px solid var(--border-strong, #d0d6dc);
+      border-radius: var(--radius, 6px);
+      outline: none;
+    }
+    .login-field input:focus {
+      border-color: var(--blue, #2563eb);
+      box-shadow: 0 0 0 3px var(--blue-soft, #eff4fe);
+    }
+    .login-btn {
+      width: 100%; margin-top: 6px;
+      padding: 10px 12px; font-size: 14px; font-weight: 600;
+      font-family: var(--font-sans);
+      color: #fff; background: var(--blue, #2563eb);
+      border: none; border-radius: var(--radius, 6px);
+      cursor: pointer;
+    }
+    .login-btn:hover { background: var(--blue-2, #1d4ed8); }
+    .login-btn:disabled { opacity: .6; cursor: default; }
+    .login-msg {
+      margin-top: 14px; font-size: 12px; min-height: 16px;
+      color: var(--red, #dc2626);
+    }
+    .login-msg.ok { color: var(--green, #10a86b); }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <form id="login-form" class="login-card" autocomplete="on">
+      <h1 class="login-title">締め作業自動化システム</h1>
+      <p class="login-sub">メールアドレスとパスワードでログイン</p>
+
+      <div class="login-field">
+        <label for="email">メールアドレス</label>
+        <input id="email" name="email" type="email" required autocomplete="username" inputmode="email">
+      </div>
+      <div class="login-field">
+        <label for="password">パスワード</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password">
+      </div>
+
+      <button id="submit" class="login-btn" type="submit">ログイン</button>
+      <div id="msg" class="login-msg" role="status" aria-live="polite"></div>
+    </form>
+  </div>
+
+  <!-- supabase-js v2（CDN）。anon キーは公開可キーのみを使う。 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script>
+    (function () {
+      var form = document.getElementById('login-form');
+      var emailEl = document.getElementById('email');
+      var passEl = document.getElementById('password');
+      var submitEl = document.getElementById('submit');
+      var msgEl = document.getElementById('msg');
+      var client = null;
+
+      function setMsg(text, ok) {
+        msgEl.textContent = text || '';
+        msgEl.className = 'login-msg' + (ok ? ' ok' : '');
+      }
+
+      // 公開設定（Supabase URL ＋ anon キー）をサーバーから取得して supabase-js を初期化。
+      // この GET は単体版（STANDALONE）でのみ 200 を返す。プラットフォーム版では 404。
+      fetch('/api/auth/standalone-login', { credentials: 'same-origin' })
+        .then(function (r) {
+          if (!r.ok) throw new Error('config_unavailable');
+          return r.json();
+        })
+        .then(function (cfg) {
+          if (!cfg || !cfg.supabase_url || !cfg.anon_key) throw new Error('config_invalid');
+          if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+            throw new Error('sdk_unavailable');
+          }
+          client = window.supabase.createClient(cfg.supabase_url, cfg.anon_key, {
+            auth: { persistSession: false, autoRefreshToken: false }
+          });
+        })
+        .catch(function () {
+          setMsg('ログイン設定を読み込めませんでした。管理者にお問い合わせください。');
+          submitEl.disabled = true;
+        });
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!client) { setMsg('ログイン設定が未準備です。'); return; }
+        var email = (emailEl.value || '').trim();
+        var password = passEl.value || '';
+        if (!email || !password) { setMsg('メールアドレスとパスワードを入力してください。'); return; }
+
+        submitEl.disabled = true;
+        setMsg('');
+
+        client.auth.signInWithPassword({ email: email, password: password })
+          .then(function (res) {
+            if (res.error || !res.data || !res.data.session) {
+              setMsg('メールアドレスまたはパスワードが正しくありません。');
+              submitEl.disabled = false;
+              return null;
+            }
+            // 取得した access_token をサーバーへ渡し、検証後に closing_session を発行してもらう。
+            return fetch('/api/auth/standalone-login', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ access_token: res.data.session.access_token })
+            });
+          })
+          .then(function (r) {
+            if (!r) return; // 上で失敗処理済み
+            if (!r.ok) {
+              setMsg('ログインに失敗しました。時間をおいて再度お試しください。');
+              submitEl.disabled = false;
+              return;
+            }
+            setMsg('ログインしました。', true);
+            location.replace('/');
+          })
+          .catch(function () {
+            setMsg('通信エラーが発生しました。ネットワークを確認してください。');
+            submitEl.disabled = false;
+          });
+      });
+    })();
+  </script>
+</body>
+</html>

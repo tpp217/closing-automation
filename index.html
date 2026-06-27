@@ -34,11 +34,11 @@
           var me = resp && resp.body;
           var standalone = !!(me && me.standalone);
           window.__CLOSING_STANDALONE__ = standalone;
-          // 認証 NG の扱い。プラットフォーム版のみ SSO へ自動誘導（従来挙動）。
+          // 認証 NG の扱い。未認証は各モードのログイン画面へ自動誘導する。
+          //   プラットフォーム版: /api/auth/login（wh SSO・従来挙動）
+          //   単体版:           /login（自前ローカルログイン）
           if (!resp.ok) {
-            if (!standalone) { location.replace('/api/auth/login'); }
-            // 単体版は自動 SSO 誘導しない（未認証は将来 /login が受け止める）。
-            renderAuthIcons();
+            location.replace(standalone ? '/login' : '/api/auth/login');
             return;
           }
           if (!me) { renderAuthIcons(); return; }
