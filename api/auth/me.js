@@ -15,14 +15,16 @@ export default async function handler(req, res) {
   const cookies = parseCookies(req);
   const session = verifySession(cookies[SESSION_COOKIE]);
 
-  // 単体販売版（STANDALONE=true）: wh SSO を使わない。フロントがログイン導線を
-  // 自前側へ向けられるよう、応答に standalone:true を additive に載せる。
-  // ※単体版の自前ログインは未整備（要実装）。整備されるまでは fail-open で 200 を返し、
-  //   フロントの SSO リダイレクト（/api/auth/login=SSO）を抑止する（誤って SSO へ飛ばさない）。
-  //   自前ログイン実装後は、ここを「session 必須 → 無ければ 401」に締めること。
+  // 単体販売版（STANDALONE=true）: wh SSO を使わず、自前ローカルログインの closing_session を正本にする。
+  //   - 有効な closing_session が無ければ 401（standalone:true を載せる）。
+  //     フロントは standalone:true を見て /api/auth/login（SSO）ではなく /login（自前）へ誘導する。
+  //   - 有効ならログイン済みとして 200。identity（テナント名/部署）は単体版では持たないため空。
   if (isStandalone()) {
+    if (!session) {
+      return res.status(401).json({ authenticated: false, standalone: true });
+    }
     return res.status(200).json({
-      authenticated: !!session,
+      authenticated: true,
       standalone: true,
       name: (session && session.name) || '',
       is_demo: false,
