@@ -45,6 +45,21 @@ closing-automation/
 - **店舗名・年月のファイル名規約**: パーサー側で正規表現マッチしているため、命名変更時はパーサーも更新
 - **スナップショットは Supabase に永続化**: 全クライアント共通で保持され、ブラウザを変えても消えない（旧 IndexedDB 版のブラウザ依存の制約は解消済み）
 
+## 単体販売版（STANDALONE）モード
+
+closing は 2 モードを env フラグ `STANDALONE` 1 本で住み分ける。**未設定＝プラットフォーム版（既定）で現状挙動を一切変えない**。
+
+| 観点 | プラットフォーム版（`STANDALONE` 未設定） | 単体版（`STANDALONE=true`） |
+|---|---|---|
+| ログイン | wh SSO（LINE 統一・既存） | アプリ自前ログイン（**未整備＝要実装**） |
+| 認証ゲート | wh JWT 監視ゲート（`AUTH_ENFORCE` 対応） | ゲート無効化（自前認証＋固定テナント分離に委譲） |
+| テナント | wh JWT の `tenant_id` クレーム | `STANDALONE_TENANT_ID`（固定・単一顧客） |
+
+- フラグ判定の正本は `api/_lib/app-mode.js`（`isStandalone()` / `standaloneTenantId()`）。サーバー専用。
+- フロントへは `/api/auth/me` の応答に `standalone:true/false` を additive に載せて伝える。
+- 単体版では `business_reports` / `*_snapshots` は固定テナントで分離され、特別な登録 UI は不要（顧客の自前データ）。
+- **未整備**: 単体版の自前ログイン（`/login`）は本対応に含まない。現状はフラグ / ゲート分岐 / 右上アイコン / テナント固定までを用意済み。env 詳細は `.env.example` 参照。
+
 ## デプロイ
 
 - 本番: `https://closing.utinc.dev`

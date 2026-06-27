@@ -27,6 +27,7 @@
  *                     workspace-hub の SYSTEM_CATALOG / system_access.system_key と一致が必要。
  */
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { isStandalone, standaloneTenantId } from './app-mode.js';
 
 const DEFAULT_JWKS_URL = 'https://auth.utinc.dev/.well-known/jwks.json';
 const DEFAULT_SYSTEM_KEY = 'closing';
@@ -122,6 +123,13 @@ export async function verifyToken(token) {
  *   - allowed:false → 呼び出し側で status/body を返してブロック（enforce 時のみ発生）
  */
 export async function evaluateAuth({ authHeader, cookieHeader, method = '', path = '' } = {}) {
+  // 単体販売版（STANDALONE=true）: wh SSO/JWT が存在しない運用のため、wh JWT 監視ゲートを
+  // 無効化して常に通す（AUTH_ENFORCE=on 併用時に自前認証の API が 401 になるのを防ぐ）。
+  // 認可は自前ログイン（要実装）＋ resolveTenant の固定テナント分離に委ねる。
+  // ※プラットフォーム版（STANDALONE 未設定）はこの分岐に入らず従来どおり＝挙動不変。
+  if (isStandalone()) {
+    return { allowed: true };
+  }
   const enforce = isEnforcing();
   // ヘッダ優先・無ければ SSO ログイン済みブラウザの wh_token cookie（フロント変更不要で認証が通る）。
   const token = extractBearer(authHeader) ?? extractWhTokenCookie(cookieHeader);
@@ -187,6 +195,17 @@ export function sendBlock(res, evalResult) {
  * @returns {Promise<{ ok:true, tenantId:string } | { ok:false, status:number, body:object }>}
  */
 export async function resolveTenant({ authHeader, cookieHeader } = {}) {
+  // 単体販売版: wh JWT が無く tenant_id クレームを取得できないため、env の固定テナントで
+  // 分離コードを成立させる（単一顧客＝1 テナント）。STANDALONE_TENANT_ID 未設定なら
+  // fail-closed（誤って全テナント横断を許さない）。
+  // ※プラットフォーム版（STANDALONE 未設定）はこの分岐に入らず従来どおり＝挙動不変。
+  if (isStandalone()) {
+    const tid = standaloneTenantId();
+    if (!tid) {
+      return { ok: false, status: 500, body: { error: '単体版のテナントが未設定です（STANDALONE_TENANT_ID）' } };
+    }
+    return { ok: true, tenantId: tid };
+  }
   const token = extractBearer(authHeader) ?? extractWhTokenCookie(cookieHeader);
   if (!token) {
     return { ok: false, status: 401, body: { error: 'テナントを特定できません（認証トークン未提供）' } };
