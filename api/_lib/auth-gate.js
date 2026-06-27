@@ -171,3 +171,33 @@ export async function evaluateAuth({ authHeader, cookieHeader, method = '', path
 export function sendBlock(res, evalResult) {
   res.status(evalResult.status || 401).json(evalResult.body || { error: 'unauthorized' });
 }
+
+/**
+ * テナント分離のための tenant_id 解決（enforce とは独立・常時有効）。
+ *
+ * ── なぜ evaluateAuth と分けるのか ──
+ *   evaluateAuth は監視モード（AUTH_ENFORCE 未設定）では token 不正でも allowed:true を返す。
+ *   しかしテナント分離は「クロステナント漏洩を防ぐ」セキュリティ要件であり、
+ *   enforce フラグの ON/OFF に関係なく**常に**有効でなければならない。
+ *   そのため永続業務テーブルを触る API は、enforce の手前で本関数により
+ *   有効な tenant_id を必ず取得し、取れなければ **fail-closed**（401）でブロックする。
+ *
+ * トークン取得元は evaluateAuth と同じ（Authorization: Bearer 優先、無ければ wh_token cookie）。
+ *
+ * @returns {Promise<{ ok:true, tenantId:string } | { ok:false, status:number, body:object }>}
+ */
+export async function resolveTenant({ authHeader, cookieHeader } = {}) {
+  const token = extractBearer(authHeader) ?? extractWhTokenCookie(cookieHeader);
+  if (!token) {
+    return { ok: false, status: 401, body: { error: 'テナントを特定できません（認証トークン未提供）' } };
+  }
+  const result = await verifyToken(token);
+  if (!result.ok) {
+    return { ok: false, status: 401, body: { error: 'テナントを特定できません（トークン検証失敗）' } };
+  }
+  const tenantId = result.claims.tenant_id;
+  if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '') {
+    return { ok: false, status: 403, body: { error: 'テナントが未設定のトークンです' } };
+  }
+  return { ok: true, tenantId: tenantId.trim() };
+}
