@@ -10,16 +10,38 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css?v=202605010003">
   <script>
-    // 認証ゲート: 未ログインなら LINE ログインへ即リダイレクト。
+    // 認証ゲート: 未ログインなら LINE ログイン（SSO）へ即リダイレクト。
     // 併せて me の本文から identity（テナント名 / 氏名 / 所属部署）を読み、ヘッダに描画する。
+    //
+    // ── 単体販売版（STANDALONE）対応 ──
+    //   me() の応答に standalone:true が載る場合は wh SSO を使わない運用。
+    //   - me が 401 でも /api/auth/login（=SSO）へ飛ばさない（単体版に SSO は無いため）。
+    //     ※単体版の自前ログイン（/login）は未整備（要実装）。整備後はそこへ誘導する。
+    //   - 右上の認証アイコン（再ログイン / ログアウト）の遷移先をモードで切替える。
+    //   プラットフォーム版（standalone 未設定）は従来どおり＝挙動不変。
     (function () {
+      // フロントはモードを知らないので、まずグローバルに保持して icon 描画で参照する。
+      window.__CLOSING_STANDALONE__ = false;
       fetch('/api/auth/me', { credentials: 'same-origin' })
         .then(function (r) {
-          if (!r.ok) { location.replace('/api/auth/login'); return null; }
-          return r.json().catch(function () { return null; });
+          // 200 以外は本文から standalone を判定できないため一旦 JSON を試みる。
+          return r.json().then(
+            function (j) { return { ok: r.ok, body: j }; },
+            function () { return { ok: r.ok, body: null }; }
+          );
         })
-        .then(function (me) {
-          if (!me) return;
+        .then(function (resp) {
+          var me = resp && resp.body;
+          var standalone = !!(me && me.standalone);
+          window.__CLOSING_STANDALONE__ = standalone;
+          // 認証 NG の扱い。プラットフォーム版のみ SSO へ自動誘導（従来挙動）。
+          if (!resp.ok) {
+            if (!standalone) { location.replace('/api/auth/login'); }
+            // 単体版は自動 SSO 誘導しない（未認証は将来 /login が受け止める）。
+            renderAuthIcons();
+            return;
+          }
+          if (!me) { renderAuthIcons(); return; }
           // DOM 構築後に描画する（このスクリプトは <head> で走るため）。
           function render() {
             var box = document.getElementById('header-identity');
@@ -43,14 +65,65 @@
             });
           }
           if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', render);
+            document.addEventListener('DOMContentLoaded', function () { render(); renderAuthIcons(); });
           } else {
             render();
+            renderAuthIcons();
           }
         })
-        .catch(function () { /* ネットワーク失敗時は操作時の API 401 で再判定 */ });
+        .catch(function () { /* ネットワーク失敗時は操作時の API 401 で再判定 */ renderAuthIcons(); });
+
+      // 再ログイン / ログアウトのアイコンボタン（画面右上・アイコンのみ）。
+      // 遷移先をモードで切替: プラットフォーム→SSO、単体→自前。
+      //   再ログイン  プラットフォーム: /api/auth/login（SSO・無音で再 mint） / 単体: /login（未整備）
+      //   ログアウト  両モード: /api/auth/logout（セッション失効してトップへ）
+      // ※iframe 埋め込み時（is-embedded）はヘッダ自体を隠す既存方針に合わせ描画しない。
+      function renderAuthIcons() {
+        if (document.documentElement.classList.contains('is-embedded')) return;
+        var box = document.getElementById('header-auth-icons');
+        if (!box || box.dataset.rendered === '1') return;
+        var standalone = !!window.__CLOSING_STANDALONE__;
+        var reloginHref = standalone ? '/login' : '/api/auth/login';
+        var reloginTitle = standalone ? '再ログイン' : '再ログイン（表示を最新に）';
+
+        // 再ログイン（循環矢印 ↻）
+        var relogin = document.createElement('a');
+        relogin.href = reloginHref;
+        relogin.title = reloginTitle;
+        relogin.setAttribute('aria-label', '再ログイン');
+        relogin.className = 'auth-icon-btn';
+        relogin.innerHTML =
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
+
+        // ログアウト（退出矢印 ⇥）
+        var logout = document.createElement('a');
+        logout.href = '/api/auth/logout';
+        logout.title = 'ログアウト';
+        logout.setAttribute('aria-label', 'ログアウト');
+        logout.className = 'auth-icon-btn';
+        logout.innerHTML =
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
+
+        box.appendChild(relogin);
+        box.appendChild(logout);
+        box.dataset.rendered = '1';
+      }
     })();
   </script>
+  <style>
+    /* 認証アイコン（再ログイン / ログアウト）。アイコンのみ・最小限の装飾。 */
+    .auth-icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: 6px;
+      border: 1px solid var(--border, rgba(255,255,255,0.18));
+      color: var(--text-muted, #9aa3b2); background: transparent;
+      cursor: pointer; text-decoration: none;
+    }
+    .auth-icon-btn:hover { color: var(--text, #e6e9ef); }
+    .is-embedded #header-auth-icons { display: none; }
+  </style>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
@@ -78,6 +151,8 @@
           <!-- ログイン中の identity（テナント名／氏名／所属部署）。me() の本文から描画される。 -->
           <span id="header-identity" style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--text-muted,#6b7280);"></span>
           <span id="header-clock"></span>
+          <!-- 再ログイン / ログアウトのアイコン（画面右上・アイコンのみ）。モードで遷移先を切替。 -->
+          <span id="header-auth-icons" style="display:inline-flex;align-items:center;gap:8px;"></span>
         </div>
       </div>
     </header>
